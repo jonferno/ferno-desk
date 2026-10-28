@@ -1,0 +1,20 @@
+[Unit]
+Description=HL DESK - read-only Hyperliquid research desk
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hl
+WorkingDirectory=/opt/hl-desk
+Environment=NODE_ENV=production
+Environment=PORT=8899
+Environment=DATA_DIR=/opt/hl-desk/data
+# Set your own passcode here, or drop this line to run without a gate.
+Environment=SITE_PASSCODE=change-me
+ExecStart=/usr/bin/env node_modules/.bin/tsx src/server/index.ts
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

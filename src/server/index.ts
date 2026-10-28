@@ -1,0 +1,205 @@
+import Fastify from "fastify";
+import fastifyStatic from "@fastify/static";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import type { DeskSnapshot, WalletDetail } from "@shared/hl";
+import { candles, chartPayload, markets, screenLeaderboard, walletDetail, walletFillsPage, walletStats } from "../hl/desk";
+import { Following } from "../hl/follow";
+import { registerAuth } from "./auth";
+
+/**
+ * Read-only Hyperliquid desk, plus a following list that can post trade alerts
+ * to a Discord webhook. No wallet, no keys, no orders.
+ */
+
+const REFRESH_MS = 10 * 60_000;
+const WALLET_TTL_MS = 5 * 60_000;
+
+let cache: DeskSnapshot | null = null;
+let building: Promise<void> | null = null;
+const wallets = new Map<string, { at: number; data: WalletDetail }>();
+const chartCache = new Map<string, { at: number; payload: unknown }>();
+const statsCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof walletStats>> | null }>();
+const STATS_TTL_MS = 5 * 60_000;
+const CHART_TTL_MS = 30_000;
+
+async function build(): Promise<void> {
+  if (building) return building;
+  building = (async () => {
+    const started = Date.now();
+    try {
+      const [screen, marketRows] = await Promise.all([screenLeaderboard(), markets()]);
+      cache = { at: Date.now(), leaderboard: screen.pass, nearMiss: screen.near, markets: marketRows };
+      console.log(
+        `[desk] refreshed in ${((Date.now() - started) / 1000).toFixed(1)}s: ` +
+          `${screen.pass.length} consistent, ${screen.near.length} near misses, ${marketRows.length} markets`,
+      );
+    } catch (err) {
+      console.error("[desk] refresh failed:", (err as Error).message);
+      if (!cache) cache = { at: 0, leaderboard: [], nearMiss: [], markets: [] };
+    }
+  })().finally(() => {
+    building = null;
+  });
+  return building;
+}
+
+export function createServer(deps: { following: Following }) {
+  const app = Fastify({ logger: false, trustProxy: true });
+  const { following } = deps;
+  registerAuth(app, process.env.SITE_PASSCODE ?? "");
+
+  app.get("/api/health", async () => ({
+    ok: true,
+    mode: "read-only",
+    builtAt: cache?.at ?? 0,
+    wallets: cache?.leaderboard.length ?? 0,
+    nearMiss: cache?.nearMiss.length ?? 0,
+    markets: cache?.markets.length ?? 0,
+    following: following.view().wallets.length,
+  }));
+
+  app.get("/api/desk", async () => {
+    if (!cache) await build();
+    return { ok: true, desk: cache };
+  });
+
+  app.get<{ Params: { addr: string } }>("/api/wallet/:addr", async (req, reply) => {
+    const addr = String(req.params.addr ?? "");
+    if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) return reply.code(400).send({ ok: false, error: "bad address" });
+    const hit = wallets.get(addr);
+    if (hit && Date.now() - hit.at < WALLET_TTL_MS) return { ok: true, wallet: hit.data, following: following.isFollowing(addr) };
+    try {
+      const data = await walletDetail(addr, 100);
+      wallets.set(addr, { at: Date.now(), data });
+      return { ok: true, wallet: data, following: following.isFollowing(addr) };
+    } catch (err) {
+      return reply.code(502).send({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  app.get<{ Querystring: { coin?: string; interval?: string; bars?: string } }>("/api/candles", async (req, reply) => {
+    const coin = String(req.query.coin ?? "BTC").toUpperCase();
+    const interval = String(req.query.interval ?? "15m");
+    const bars = Math.max(60, Math.min(900, Number(req.query.bars ?? 400) || 400));
+    try {
+      return { ok: true, ...(await candles(coin, interval, bars)) };
+    } catch (err) {
+      return reply.code(502).send({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  app.get<{ Params: { addr: string }; Querystring: { offset?: string; limit?: string } }>(
+    "/api/wallet/:addr/fills",
+    async (req, reply) => {
+      const addr = String(req.params.addr ?? "");
+      if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) return reply.code(400).send({ ok: false, error: "bad address" });
+      const offset = Math.max(0, Number(req.query.offset ?? 0) || 0);
+      const limit = Math.max(5, Math.min(100, Number(req.query.limit ?? 25) || 25));
+      try {
+        return { ok: true, ...(await walletFillsPage(addr, offset, limit)) };
+      } catch (err) {
+        return reply.code(502).send({ ok: false, error: (err as Error).message });
+      }
+    },
+  );
+
+  app.get<{ Querystring: { coin?: string; interval?: string; bars?: string } }>("/api/chart", async (req, reply) => {
+    const coin = String(req.query.coin ?? "BTC").toUpperCase();
+    const interval = String(req.query.interval ?? "15m");
+    const bars = Math.max(120, Math.min(900, Number(req.query.bars ?? 400) || 400));
+    const key = `${coin}:${interval}:${bars}`;
+    const hit = chartCache.get(key);
+    if (hit && Date.now() - hit.at < CHART_TTL_MS) return { ok: true, ...(hit.payload as object) };
+    try {
+      const payload = await chartPayload(coin, interval, bars);
+      chartCache.set(key, { at: Date.now(), payload });
+      return { ok: true, ...payload };
+    } catch (err) {
+      return reply.code(502).send({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  app.get("/api/following", async () => {
+    const view = following.view();
+    const wallets = await Promise.all(
+      view.wallets.map(async (w) => {
+        const hit = statsCache.get(w.addr);
+        if (hit && Date.now() - hit.at < STATS_TTL_MS) return { ...w, stats: hit.data };
+        let data: Awaited<ReturnType<typeof walletStats>> | null = null;
+        try {
+          data = await walletStats(w.addr);
+        } catch {
+          // Never cache a failure: a throttle spike must not blank the card for minutes.
+          return { ...w, stats: hit?.data ?? null };
+        }
+        statsCache.set(w.addr, { at: Date.now(), data });
+        return { ...w, stats: data };
+      }),
+    );
+    return { ok: true, ...view, wallets };
+  });
+
+  app.post<{ Body: { addr?: string } }>("/api/following", async (req, reply) => {
+    const addr = String(req.body?.addr ?? "");
+    if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) return reply.code(400).send({ ok: false, error: "bad address" });
+    const res = await following.add(addr);
+    return { ok: true, ...res, following: following.view() };
+  });
+
+  app.delete<{ Params: { addr: string } }>("/api/following/:addr", async (req) => {
+    following.remove(String(req.params.addr));
+    return { ok: true, following: following.view() };
+  });
+
+  app.post<{ Params: { addr: string }; Body: { enabled?: boolean } }>("/api/following/:addr/alerts", async (req) => {
+    const ok = following.setAlerts(String(req.params.addr), Boolean(req.body?.enabled));
+    return { ok, following: following.view() };
+  });
+
+  app.put<{ Body: { url?: string } }>("/api/following/webhook", async (req) => {
+    following.setWebhook(String(req.body?.url ?? "").trim() || null);
+    return { ok: true, following: following.view() };
+  });
+
+  app.post("/api/following/test", async () => ({ ok: await following.testWebhook() }));
+
+  const dist = resolve(import.meta.dirname, "../../dist");
+  if (existsSync(dist)) {
+    app.register(fastifyStatic, { root: dist, wildcard: false });
+    app.setNotFoundHandler((req, reply) => {
+      if (req.raw.url && !req.raw.url.startsWith("/api")) return reply.sendFile("index.html");
+      return reply.code(404).send({ ok: false, error: "not found" });
+    });
+  }
+
+  return { app };
+}
+
+async function main(): Promise<void> {
+  const port = Number(process.env.PORT ?? 8899);
+  const dataDir = process.env.DATA_DIR ?? resolve(import.meta.dirname, "../../data");
+  const following = new Following(dataDir);
+  const { app } = createServer({ following });
+  await app.listen({ port, host: "127.0.0.1" });
+  console.log(`hl desk  http://localhost:${port}  (read only)`);
+
+  following.start();
+  void build();
+  setInterval(() => void build(), REFRESH_MS);
+
+  const shutdown = async () => {
+    following.stop();
+    await app.close();
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
+  main().catch((err) => {
+    console.error("fatal:", err);
+    process.exit(1);
+  });
+}
