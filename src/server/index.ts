@@ -166,9 +166,28 @@ export function createServer(deps: { following: Following }) {
 
   const dist = resolve(import.meta.dirname, "../../dist");
   if (existsSync(dist)) {
-    app.register(fastifyStatic, { root: dist, wildcard: false });
+    app.register(fastifyStatic, {
+      root: dist,
+      wildcard: false,
+      cacheControl: false,
+      setHeaders(res, filePath) {
+        const name = filePath.replace(/\\/g, "/");
+        if (name.endsWith(".html")) {
+          // A new build must show up on the next visit, and no-store also keeps
+          // the page out of the back-forward cache so an old bundle cannot linger.
+          res.setHeader("cache-control", "no-store, must-revalidate");
+        } else if (/\/assets\/[^/]+\.(js|css|woff2?|svg|png|jpe?g|webp)$/.test(name)) {
+          res.setHeader("cache-control", "public, max-age=31536000, immutable");
+        } else {
+          res.setHeader("cache-control", "public, max-age=300");
+        }
+      },
+    });
     app.setNotFoundHandler((req, reply) => {
-      if (req.raw.url && !req.raw.url.startsWith("/api")) return reply.sendFile("index.html");
+      if (req.raw.url && !req.raw.url.startsWith("/api")) {
+        reply.header("cache-control", "no-store, must-revalidate");
+        return reply.sendFile("index.html");
+      }
       return reply.code(404).send({ ok: false, error: "not found" });
     });
   }
