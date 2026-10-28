@@ -230,7 +230,7 @@ export function WalletView({ addr }: { addr: string | null }) {
                           <th>SIZE</th>
                           <th>AVG ENTRY</th>
                           <th>MARK</th>
-                          <th>UNREAL</th>
+                          <th>UNREAL %</th>
                           <th>FILLS</th>
                         </tr>
                       </thead>
@@ -249,7 +249,17 @@ export function WalletView({ addr }: { addr: string | null }) {
                             <td className="num">{Math.abs(p.size).toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
                             <td className="num">{px(p.entryPx)}</td>
                             <td className="num">{px(p.markPx)}</td>
-                            <td className={`num ${p.unrealizedPnl >= 0 ? "is-up" : "is-down"}`}>{money(p.unrealizedPnl)}</td>
+                            <td
+                              className={`num ${p.unrealizedPnl >= 0 ? "is-up" : "is-down"}`}
+                              title={money(p.unrealizedPnl)}
+                            >
+                              {p.entryPx > 0
+                                ? `${p.unrealizedPnl >= 0 ? "+" : ""}${(
+                                    ((p.markPx - p.entryPx) / p.entryPx) *
+                                    (p.size > 0 ? 100 : -100)
+                                  ).toFixed(1)}%`
+                                : "-"}
+                            </td>
                             <td className="num">{p.fills}</td>
                           </tr>
                         ))}
