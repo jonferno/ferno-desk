@@ -1,5 +1,5 @@
 /* ============================================================
-   FERNO.fun — interactive pixel fire
+   FERNO.fun: interactive pixel fire
    GPU fluid solver (advection + buoyancy + vorticity + pressure
    projection) rendered to a low-res target and blitted with
    nearest-neighbour sampling for a hard pixel-art look.
@@ -565,12 +565,12 @@ void main() {
     const wide = SPLAT_RADIUS * 3;
     const up = RISE * 14 * power;
 
-    // 1. core — stacked white / orange / ember punches with real volume
+    // 1. core: stacked white / orange / ember punches with real volume
     splat(p.x, p.y, 0, up,          3.0 * power, 1.5, 0.6,  core * 1.6);
     splat(p.x, p.y, 0, up * 0.55,   1.9 * power, 0.9, 0.3,  core);
     splat(p.x, p.y, 0, up * 0.3,    1.3 * power, 0.5, 0.14, wide);
 
-    // 2. shock ring — jets thrown outward in every direction
+    // 2. shock ring: jets thrown outward in every direction
     const JETS = 16;
     const ringR = 0.055 * power;
     const jetV = RISE * 9 * power;
@@ -919,7 +919,7 @@ void main() {
       cells[i] = Math.min(1, cells[i] + 0.55);
     }
     // Same contract as the GPU build: a blast at a screen point. There is no
-    // solver behind this renderer, so the explosion is the blob itself — a
+    // solver behind this renderer, so the explosion is the blob itself: a
     // wide disc of heat stamped at the click, the whole floor lit, and the
     // first generous frames letting it spread toward the top of the screen.
     function detonate(clientX, clientY) {

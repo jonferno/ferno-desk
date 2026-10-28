@@ -1,7 +1,7 @@
 import { ema } from "./math";
 
 /**
- * MACD with a configurable trend read — a checked port of AI-Crypto-Trader's
+ * MACD with a configurable trend read: a checked port of AI-Crypto-Trader's
  * `trader/indicators/macd_mtf.py`.
  *
  * `crossover` and `histogram` are the same predicate (hist === macd - signal); both

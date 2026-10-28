@@ -151,7 +151,7 @@ export function Following({ onPick }: { onPick: (addr: string) => void }) {
                   </header>
 
                   <div className="hl-card__equity">
-                    {s ? money(s.equity) : "—"}
+                    {s ? money(s.equity) : "-"}
                     {s ? (
                       <span className={`hl-card__roi ${s.roi30 >= 0 ? "is-up" : "is-down"}`}>{pct(s.roi30)}</span>
                     ) : null}

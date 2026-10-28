@@ -312,7 +312,7 @@ export function WalletView({ addr }: { addr: string | null }) {
                     <td className="num">{f.px < 1 ? f.px.toFixed(4) : f.px.toFixed(2)}</td>
                     <td className="num">{money(f.notional)}</td>
                     <td className={`num ${f.closedPnl > 0 ? "is-up" : f.closedPnl < 0 ? "is-down" : ""}`}>
-                      {f.closedPnl ? money(f.closedPnl) : "—"}
+                      {f.closedPnl ? money(f.closedPnl) : "-"}
                     </td>
                   </tr>
                 ))}

@@ -1,4 +1,4 @@
-# HL DESK — a self-hosted Hyperliquid research desk
+# HL DESK: a self-hosted Hyperliquid research desk
 
 Read-only research over Hyperliquid perps. It screens trader wallets, replays the last 48 hours of
 their fills to work out what they actually built, charts price with a MACD pane, and can post fill

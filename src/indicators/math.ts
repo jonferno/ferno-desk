@@ -1,5 +1,5 @@
 /**
- * Indicator maths — a checked port of AI-Crypto-Trader's `trader.indicators`.
+ * Indicator maths: a checked port of AI-Crypto-Trader's `trader.indicators`.
  *
  * The Python package in D:\VibeCoding\AI-Crypto-Trader is the authoritative
  * implementation. This copy exists so the cockpit can compute indicators inside its

@@ -1,7 +1,7 @@
 import { atr, ema } from "./math";
 
 /**
- * Zero Lag Signals trend — the same approximation AI-Crypto-Trader uses, ported
+ * Zero Lag Signals trend: the same approximation AI-Crypto-Trader uses, ported
  * line for line. See that project's `trader/indicators/zerolag.py` for the
  * reasoning behind each step; the comments here only record what the code does.
  */

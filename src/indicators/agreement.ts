@@ -1,5 +1,5 @@
 /**
- * Two-indicator agreement rule — a checked port of AI-Crypto-Trader's
+ * Two-indicator agreement rule: a checked port of AI-Crypto-Trader's
  * `trader/indicators/agreement.py`.
  *
  * The rule that matters: a direction is "agreed" only on a candle where BOTH

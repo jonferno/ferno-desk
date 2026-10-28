@@ -83,7 +83,7 @@ function Table({
               <td className="num is-down">{money(r.worstDay)}</td>
               <td className={`num ${r.concentration >= 0.55 ? "is-down" : ""}`}>{pct(r.concentration, 0)}</td>
               <td className="num">{r.trades24h ?? "·"}</td>
-              {showReason ? <td className="hl-reason">{r.reason || "—"}</td> : null}
+              {showReason ? <td className="hl-reason">{r.reason || "-"}</td> : null}
             </tr>
           ))}
         </tbody>
