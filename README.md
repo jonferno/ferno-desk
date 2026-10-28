@@ -6,6 +6,8 @@ alerts to a Discord webhook. No wallet, no keys, no orders. Nothing here trades.
 
 The public demo at <https://ferno.fun/hl/> is a frozen snapshot of the same UI.
 
+![Wallet view: positions rebuilt from the last 48h of fills, fills marked on the chart, equity timeline](docs/screenshot-wallet.jpg)
+
 ## What it does
 
 **Screener.** Pulls the Hyperliquid leaderboard, then checks the 400 largest accounts against four
