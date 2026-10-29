@@ -6,7 +6,7 @@ alerts to a Discord webhook. No wallet, no keys, no orders. Nothing here trades.
 
 The public demo at <https://ferno.fun/hl/> is a frozen snapshot of the same UI.
 
-![Wallet view: positions rebuilt from the last 48h of fills, fills marked on the chart, equity timeline](docs/screenshot-wallet.jpg)
+![Wallet view: equity timeline with range chips, positions rebuilt from the last 48h of fills, paged trade list](docs/screenshot-wallet.jpg)
 
 ## What it does
 
@@ -16,10 +16,12 @@ more than 70% of profit, and a worst day better than -30% of equity. Wallets tha
 consistent; wallets that fail exactly one test are listed as near misses with the test they failed,
 so the board still shows the interesting ones. Equity floor is $10k.
 
-**Wallet page.** Equity curve, candles with the wallet's fills marked, the explorer link, and the
-position table. Positions are rebuilt from the last 48h of fills only, with average-cost accounting,
+**Wallet page.** Equity timeline with 24h/7d/30d/all ranges, the explorer link, the position table and
+the 48h trade list. The curve merges every portfolio window Hyperliquid returns (day, week, month,
+all time) so the last day is not a single point. Positions are rebuilt from the last 48h of fills only,
+with average-cost accounting,
 so "size 500 entered at 2,719" from a trade three weeks ago does not show up as a current position.
-The venue's own total is kept as a hover hint when it differs. Trades are paginated.
+The venue's own total is kept as a hover hint when it differs. Trades page 50 at a time.
 
 **Chart.** Alphabetical, searchable token picker; blue up / orange down candles; a measure tool you
 arm with a button and finish with two clicks; MACD 12/26/9 plus a zero-lag band aligned to the price
