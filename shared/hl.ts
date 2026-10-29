@@ -50,12 +50,6 @@ export interface ChartMarker {
   text: string;
 }
 
-export interface WalletChart {
-  coin: string;
-  candles: Candle[];
-  markers: ChartMarker[];
-}
-
 export interface WalletDetail {
   addr: string;
   equity: number;
@@ -71,7 +65,6 @@ export interface WalletDetail {
   spot: SpotBalance[];
   /** Total fills in the 48h window, so the table can page. */
   fillsTotal: number;
-  chart: WalletChart;
 }
 
 export interface PerpPosition {

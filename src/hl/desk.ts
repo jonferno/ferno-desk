@@ -1,7 +1,5 @@
 import type {
-  Candle,
   CandleResponse,
-  ChartMarker,
   CurvePoint,
   FollowedLastTrade,
   LeaderRow,
@@ -66,37 +64,26 @@ async function fillsSince(addr: string, hours: number): Promise<Fills24> {
   return { trades: fills.length, coins: new Set(fills.map((f) => f.coin)).size };
 }
 
-const isBuyDir = (dir: string) =>
-  dir.startsWith("Open Long") || dir.startsWith("Close Short") || dir === "Buy";
-
-async function chartFor(
-  coin: string,
-  fills: Array<{ time: number; dir: string; px: string }>,
-): Promise<{ candles: Candle[]; markers: ChartMarker[] }> {
-  const now = Date.now();
-  try {
-    const rows = await info<Array<{ t: number; o: string; h: string; l: string; c: string }>>({
-      type: "candleSnapshot",
-      req: { coin, interval: "1m", startTime: now - 24 * 3600_000, endTime: now },
-    });
-    const candles: Candle[] = rows.map((c) => ({
-      time: Math.floor(Number(c.t) / 1000),
-      open: Number(c.o),
-      high: Number(c.h),
-      low: Number(c.l),
-      close: Number(c.c),
-    }));
-    const markers: ChartMarker[] = fills.slice(-40).map((f) => ({
-      time: Math.floor(f.time / 1000),
-      position: isBuyDir(f.dir) ? "belowBar" : "aboveBar",
-      color: isBuyDir(f.dir) ? "#58d68d" : "#ff7b72",
-      shape: isBuyDir(f.dir) ? "arrowUp" : "arrowDown",
-      text: `${f.dir} ${Number(f.px).toFixed(2)}`,
-    }));
-    return { candles, markers };
-  } catch {
-    return { candles: [], markers: [] };
+/**
+ * Merge the four portfolio windows into one equity series.
+ *
+ * Each window samples the same account value at a different resolution: the
+ * day view is ~2h apart, the month view ~16h, all-time ~18h. Using only
+ * all-time leaves the last day as one or two points, which is exactly the
+ * stretch someone opens a wallet to look at. Timestamps are deduplicated and
+ * non-positive values dropped: all-time starts at 0 before the account was
+ * funded, and that one point flattens the whole chart.
+ */
+function equityCurve(p: Awaited<ReturnType<typeof portfolio>>): CurvePoint[] {
+  const byTime = new Map<number, number>();
+  for (const key of ["allTime", "month", "week", "day"] as const) {
+    for (const [t, v] of p[key]?.accountValueHistory ?? []) {
+      const value = Number(v);
+      if (!Number.isFinite(value) || value <= 0) continue;
+      byTime.set(Number(t), value);
+    }
   }
+  return [...byTime.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => ({ t, v }));
 }
 
 export interface ScreenResult {
@@ -568,28 +555,18 @@ export async function walletStats(addr: string): Promise<{
   };
 }
 
-export async function walletDetail(addr: string, book = 100): Promise<WalletDetail> {
+export async function walletDetail(addr: string, limit = 50): Promise<WalletDetail> {
   const p = await portfolio(addr);
-  const curve: CurvePoint[] = (p.allTime?.accountValueHistory ?? p.month?.accountValueHistory ?? []).map(([t, v]) => ({ t, v: Number(v) }));
+  const curve = equityCurve(p);
   const stats = dailyStats((p.month?.pnlHistory ?? p.allTime?.pnlHistory ?? []).map(([, v]) => Number(v)).filter(Number.isFinite));
   const equity = curve.length ? curve[curve.length - 1]!.v : 0;
   const raw = await rawFills48(addr);
   const ordered = [...raw].sort((a, b) => b.time - a.time);
-
-  const byCount = new Map<string, number>();
-  for (const f of raw) byCount.set(f.coin, (byCount.get(f.coin) ?? 0) + 1);
-  const topCoin = [...byCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "BTC";
   const live = await windowPositions(addr, raw);
-
-  const chart = await chartFor(
-    topCoin,
-    raw.filter((f) => f.coin === topCoin).map((f) => ({ time: f.time, dir: f.dir, px: f.px })),
-  );
 
   return {
     addr,
     equity,
-    chart: { coin: topCoin, ...chart },
     pnl30: stats.pnl,
     roi30: equity ? stats.pnl / equity : 0,
     greenDays: stats.greenDays,
@@ -597,7 +574,7 @@ export async function walletDetail(addr: string, book = 100): Promise<WalletDeta
     curve,
     positions: live.positions,
     spot: live.spot,
-    fills: await toFills(ordered.slice(0, 25)),
+    fills: await toFills(ordered.slice(0, limit)),
     fillsTotal: ordered.length,
   };
 }

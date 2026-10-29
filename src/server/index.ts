@@ -70,7 +70,7 @@ export function createServer(deps: { following: Following }) {
     const hit = wallets.get(addr);
     if (hit && Date.now() - hit.at < WALLET_TTL_MS) return { ok: true, wallet: hit.data, following: following.isFollowing(addr) };
     try {
-      const data = await walletDetail(addr, 100);
+      const data = await walletDetail(addr, 50);
       wallets.set(addr, { at: Date.now(), data });
       return { ok: true, wallet: data, following: following.isFollowing(addr) };
     } catch (err) {

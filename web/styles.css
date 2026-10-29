@@ -2697,6 +2697,10 @@ kbd {
   max-height: 260px;
 }
 
+.hl-scroll--trades {
+  max-height: 640px;
+}
+
 .hl-table {
   width: 100%;
   border-collapse: collapse;
@@ -2853,27 +2857,21 @@ kbd {
   color: #eae3d6;
 }
 
-.hl-curve {
+.hl-equitywrap {
+  margin-bottom: 16px;
+}
+
+.hl-equity {
   width: 100%;
-  height: 200px;
-  display: block;
-  background: rgba(255, 255, 255, 0.015);
-  border-radius: 6px;
-  margin-bottom: 14px;
+  height: 340px;
 }
 
-.hl-curve path {
-  fill: none;
-  stroke-width: 2.5;
-  stroke-linejoin: round;
+.hl-trades__head {
+  margin: 4px 0 6px;
 }
 
-.hl-curve path.is-up {
-  stroke: #4aa8ff;
-}
-
-.hl-curve path.is-down {
-  stroke: #ff8c42;
+.hl-trades__head h3 {
+  margin: 0;
 }
 
 .hl-two {

@@ -13,40 +13,73 @@ const clock = (ms: number) =>
   new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 interface LCChart {
-  addCandlestickSeries: (o: Record<string, unknown>) => { setData: (d: unknown[]) => void; setMarkers: (m: unknown[]) => void };
+  addAreaSeries: (o: Record<string, unknown>) => { setData: (d: unknown[]) => void };
   applyOptions: (o: Record<string, unknown>) => void;
   timeScale: () => { fitContent: () => void };
   remove: () => void;
 }
 type LCModule = { createChart: (el: HTMLElement, o: Record<string, unknown>) => LCChart };
 
-function CandleChart({ chart }: { chart: WalletDetail["chart"] }) {
+const RANGES = [
+  { id: "24h", label: "24H", ms: 24 * 3_600_000 },
+  { id: "7d", label: "7D", ms: 7 * 86_400_000 },
+  { id: "30d", label: "30D", ms: 30 * 86_400_000 },
+  { id: "all", label: "ALL", ms: 0 },
+] as const;
+
+type RangeId = (typeof RANGES)[number]["id"];
+
+function EquityChart({ points }: { points: WalletDetail["curve"] }) {
   const host = useRef<HTMLDivElement>(null);
+  const [range, setRange] = useState<RangeId>("all");
+
+  // The chart wants strictly ascending integer seconds, so dedupe on the
+  // second after trimming to the selected window.
+  const series = useMemo(() => {
+    const clean = points
+      .filter((p) => Number.isFinite(p.v) && p.v > 0 && p.t > 0)
+      .sort((a, b) => a.t - b.t);
+    const span = RANGES.find((r) => r.id === range)?.ms ?? 0;
+    const from = span ? Date.now() - span : 0;
+    const seen = new Set<number>();
+    const out: Array<{ time: number; value: number }> = [];
+    for (const p of clean) {
+      if (p.t < from) continue;
+      const time = Math.floor(p.t / 1000);
+      if (seen.has(time)) continue;
+      seen.add(time);
+      out.push({ time, value: p.v });
+    }
+    return out;
+  }, [points, range]);
+
+  const first = series[0];
+  const last = series[series.length - 1];
+  const up = Boolean(first && last && last.value >= first.value);
+  const delta = first && last ? last.value - first.value : 0;
+  const pct = first && first.value ? (delta / first.value) * 100 : 0;
 
   useEffect(() => {
     const LC = (window as unknown as { LightweightCharts?: LCModule }).LightweightCharts;
     const el = host.current;
-    if (!LC || !el || !chart.candles.length) return;
+    if (!LC || !el || series.length < 2) return;
     const c = LC.createChart(el, {
-      height: 320,
+      height: 340,
       layout: { background: { color: "transparent" }, textColor: "rgba(255,255,255,0.45)", fontSize: 11 },
       grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
-      rightPriceScale: { borderColor: "rgba(255,255,255,0.08)" },
+      rightPriceScale: { borderColor: "rgba(255,255,255,0.08)", scaleMargins: { top: 0.12, bottom: 0.08 } },
       timeScale: { borderColor: "rgba(255,255,255,0.08)", timeVisible: true, secondsVisible: false },
       crosshair: { mode: 0 },
+      localization: { priceFormatter: (n: number) => money(n) },
     });
-    const s = c.addCandlestickSeries({
-      upColor: "#4aa8ff",
-      downColor: "#ff8c42",
-      wickUpColor: "#4aa8ff",
-      wickDownColor: "#ff8c42",
-      borderVisible: false,
+    const s = c.addAreaSeries({
+      lineColor: up ? "#4aa8ff" : "#ff8c42",
+      topColor: up ? "rgba(74,168,255,0.26)" : "rgba(255,140,66,0.26)",
+      bottomColor: "rgba(0,0,0,0)",
+      lineWidth: 2,
+      priceLineVisible: false,
     });
-    s.setData(chart.candles);
-    if (chart.markers.length) {
-      const times = new Set(chart.candles.map((k) => k.time));
-      s.setMarkers(chart.markers.filter((m) => times.has(m.time)));
-    }
+    s.setData(series);
     c.timeScale().fitContent();
     const ro = new ResizeObserver(() => c.applyOptions({ width: el.clientWidth }));
     ro.observe(el);
@@ -54,41 +87,31 @@ function CandleChart({ chart }: { chart: WalletDetail["chart"] }) {
       ro.disconnect();
       c.remove();
     };
-  }, [chart]);
+  }, [series, up]);
 
-  if (!chart.candles.length) return <p className="hl-empty">no candle history for this market</p>;
   return (
     <>
       <div className="hl-chart__head">
-        <span className="lab">{chart.coin} · 1m · 24h</span>
+        <span className="lab">equity timeline</span>
+        <div className="hl-seg">
+          {RANGES.map((r) => (
+            <button key={r.id} type="button" className={`chip ${range === r.id ? "is-on" : ""}`} onClick={() => setRange(r.id)}>
+              {r.label}
+            </button>
+          ))}
+        </div>
         <span className="hl-grow" />
-        <span className="hl-note">{chart.markers.length} fills marked</span>
+        <span className={`hl-note num ${delta >= 0 ? "is-up" : "is-down"}`}>
+          {money(delta)} ({pct >= 0 ? "+" : ""}
+          {pct.toFixed(1)}%)
+        </span>
       </div>
-      <div ref={host} className="hl-candles" />
+      {series.length < 2 ? (
+        <p className="hl-empty">no equity history for this wallet in this window</p>
+      ) : (
+        <div ref={host} className="hl-equity" />
+      )}
     </>
-  );
-}
-
-function Curve({ points }: { points: Array<{ t: number; v: number }> }) {
-  const path = useMemo(() => {
-    if (points.length < 2) return null;
-    const vs = points.map((p) => p.v);
-    const min = Math.min(...vs);
-    const max = Math.max(...vs);
-    const span = max - min || 1;
-    const w = 1000;
-    const h = 150;
-    const step = w / (points.length - 1);
-    const d = points
-      .map((p, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${(h - ((p.v - min) / span) * h).toFixed(1)}`)
-      .join(" ");
-    return { d, up: vs[vs.length - 1]! >= vs[0]! };
-  }, [points]);
-  if (!path) return <p className="hl-empty">no equity history returned for this wallet</p>;
-  return (
-    <svg className="hl-curve" viewBox="0 0 1000 150" preserveAspectRatio="none" role="img" aria-label="equity curve">
-      <path d={path.d} className={path.up ? "is-up" : "is-down"} />
-    </svg>
   );
 }
 
@@ -98,7 +121,7 @@ export function WalletView({ addr }: { addr: string | null }) {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [paging, setPaging] = useState(false);
-  const PAGE = 25;
+  const PAGE = 50;
   const [following, setFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -205,6 +228,10 @@ export function WalletView({ addr }: { addr: string | null }) {
             <div className="hl-stat"><span className="hl-lab">worst day</span><b className="num is-down">{money(data.worstDay)}</b></div>
           </div>
 
+          <div className="hl-equitywrap">
+            <EquityChart points={data.curve} />
+          </div>
+
           <div className="hl-pos">
             <div className="hl-chart__head">
               <span className="lab">positions from the last 48h</span>
@@ -217,7 +244,7 @@ export function WalletView({ addr }: { addr: string | null }) {
             {data.positions.length === 0 && data.spot.length === 0 ? (
               <p className="hl-empty">no positions opened in the last 48 hours</p>
             ) : (
-              <div className="hl-two">
+              <div className={data.spot.length ? "hl-two" : undefined}>
                 <div>
                   {data.positions.length === 0 ? (
                     <p className="hl-empty">no perp positions opened in this window</p>
@@ -269,9 +296,7 @@ export function WalletView({ addr }: { addr: string | null }) {
                 </div>
 
                 <div>
-                  {data.spot.length === 0 ? (
-                    <p className="hl-empty">no spot balances</p>
-                  ) : (
+                  {data.spot.length === 0 ? null : (
                     <table className="hl-table">
                       <thead>
                         <tr>
@@ -296,21 +321,12 @@ export function WalletView({ addr }: { addr: string | null }) {
             )}
           </div>
 
-          <div className="hl-chart">
-            <CandleChart chart={data.chart} />
+          <div className="hl-chart__head hl-trades__head">
+            <h3 className="lab">recent trades (48h)</h3>
+            <span className="hl-grow" />
+            <span className="hl-note">newest first · {total} fills</span>
           </div>
-
-          <div className="hl-chart">
-            <div className="hl-chart__head">
-              <span className="lab">equity timeline</span>
-              <span className="hl-grow" />
-              <span className="hl-note">full history</span>
-            </div>
-            <Curve points={data.curve} />
-          </div>
-
-          <h3 className="lab">recent trades (48h)</h3>
-          <div className="hl-scroll hl-scroll--short">
+          <div className="hl-scroll hl-scroll--trades">
             <table className="hl-table">
               <thead><tr><th>WHEN</th><th>COIN</th><th>DIR</th><th>PX</th><th>NOTIONAL</th><th>CLOSED P&L</th></tr></thead>
               <tbody>
