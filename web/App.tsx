@@ -135,7 +135,7 @@ export default function App() {
         ) : tab === "wallet" ? (
           <WalletView addr={picked} />
         ) : tab === "chart" ? (
-          <ChartTab markets={desk?.markets ?? []} />
+          <ChartTab markets={desk?.markets ?? []} readOnly={isStatic} />
         ) : (
           <Following onPick={pickAddr} />
         )}

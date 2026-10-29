@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import type { DeskSnapshot, WalletDetail } from "@shared/hl";
 import { candles, chartPayload, markets, screenLeaderboard, walletDetail, walletFillsPage, walletStats } from "../hl/desk";
 import { Following } from "../hl/follow";
+import { Favorites } from "../hl/favorites";
 import { registerAuth } from "./auth";
 
 /**
@@ -44,9 +45,9 @@ async function build(): Promise<void> {
   return building;
 }
 
-export function createServer(deps: { following: Following }) {
+export function createServer(deps: { following: Following; favorites: Favorites }) {
   const app = Fastify({ logger: false, trustProxy: true });
-  const { following } = deps;
+  const { following, favorites } = deps;
   registerAuth(app, process.env.SITE_PASSCODE ?? "");
 
   app.get("/api/health", async () => ({
@@ -57,6 +58,7 @@ export function createServer(deps: { following: Following }) {
     nearMiss: cache?.nearMiss.length ?? 0,
     markets: cache?.markets.length ?? 0,
     following: following.view().wallets.length,
+    favorites: favorites.list().length,
   }));
 
   app.get("/api/desk", async () => {
@@ -164,6 +166,19 @@ export function createServer(deps: { following: Following }) {
 
   app.post("/api/following/test", async () => ({ ok: await following.testWebhook() }));
 
+  app.get("/api/favorites", async () => ({ ok: true, coins: favorites.list() }));
+
+  app.post<{ Body: { coin?: string } }>("/api/favorites", async (req, reply) => {
+    const coin = String(req.body?.coin ?? "").trim().toUpperCase();
+    if (!/^[A-Z0-9@/._-]{1,24}$/.test(coin)) return reply.code(400).send({ ok: false, error: "coin required" });
+    return { ok: true, coins: favorites.add(coin) };
+  });
+
+  app.delete<{ Params: { coin: string } }>("/api/favorites/:coin", async (req) => ({
+    ok: true,
+    coins: favorites.remove(String(req.params.coin)),
+  }));
+
   const dist = resolve(import.meta.dirname, "../../dist");
   if (existsSync(dist)) {
     app.register(fastifyStatic, {
@@ -199,7 +214,8 @@ async function main(): Promise<void> {
   const port = Number(process.env.PORT ?? 8899);
   const dataDir = process.env.DATA_DIR ?? resolve(import.meta.dirname, "../../data");
   const following = new Following(dataDir);
-  const { app } = createServer({ following });
+  const favorites = new Favorites(dataDir);
+  const { app } = createServer({ following, favorites });
   await app.listen({ port, host: "127.0.0.1" });
   console.log(`hl desk  http://localhost:${port}  (read only)`);
 

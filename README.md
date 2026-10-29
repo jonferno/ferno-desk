@@ -26,7 +26,8 @@ return on margin. The venue's own total is kept as a hover hint when it differs.
 
 **Chart.** Alphabetical, searchable token picker; blue up / orange down candles; a measure tool you
 arm with a button and finish with two clicks; MACD 12/26/9 plus a zero-lag band aligned to the price
-pane.
+pane. Star any token to keep it: stars show at the top of the picker and as chips above the chart, so
+the handful of coins you actually trade are one click away.
 
 **Following.** Star any wallet. Its card carries the same numbers as the leaderboard plus its newest
 fill and how that position is doing right now. Optional Discord webhook: one alert per token per 15
@@ -60,7 +61,7 @@ then lives on one port, `8899` by default.
 | Variable | Default | What it does |
 |---|---|---|
 | `PORT` | `8899` | Port the engine listens on |
-| `DATA_DIR` | `./data` | Where the follow list, webhook and screener cache are written |
+| `DATA_DIR` | `./data` | Where the follow list, favorites, webhook and screener cache are written |
 | `SITE_PASSCODE` | empty | Gate for the whole app. Empty means no gate |
 
 `DATA_DIR` is created on demand. Back it up if you care about your follow list.

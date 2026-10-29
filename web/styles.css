@@ -3143,6 +3143,61 @@ kbd {
   text-align: left;
 }
 
+.hl-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.hl-picker__row > button[role="option"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.hl-picker__list button.hl-picker__star {
+  width: 24px;
+  flex: none;
+  justify-content: center;
+  padding: 5px 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.22);
+}
+
+.hl-picker__list button.hl-picker__star.is-on {
+  color: #ffb347;
+}
+
+.hl-picker__list button.hl-picker__star:hover {
+  background: transparent;
+  color: #ffd166;
+}
+
+.hl-picker__group {
+  display: block;
+  padding: 6px 8px 3px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.hl-fav.is-on {
+  color: #ffd166;
+  border-color: rgba(255, 209, 102, 0.5);
+}
+
+.hl-favbar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 0 0 8px;
+}
+
+.hl-favbar .chip {
+  font-size: 11px;
+}
+
 .hl-picker__list button:hover,
 .hl-picker__list button.is-on {
   background: rgba(239, 106, 18, 0.18);

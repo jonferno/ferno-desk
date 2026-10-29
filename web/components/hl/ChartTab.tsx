@@ -60,7 +60,21 @@ const BASE_OPTS = {
   crosshair: { mode: 0 },
 };
 
-function TokenPicker({ markets, coin, onPick }: { markets: MarketRow[]; coin: string; onPick: (c: string) => void }) {
+function TokenPicker({
+  markets,
+  coin,
+  onPick,
+  favs,
+  onToggleFav,
+  readOnly,
+}: {
+  markets: MarketRow[];
+  coin: string;
+  onPick: (c: string) => void;
+  favs: string[];
+  onToggleFav: (c: string) => void;
+  readOnly: boolean;
+}) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -72,6 +86,49 @@ function TokenPicker({ markets, coin, onPick }: { markets: MarketRow[]; coin: st
     const rest = sorted.filter((m) => !m.coin.startsWith(term) && m.coin.includes(term));
     return [...starts, ...rest];
   }, [sorted, q]);
+
+  // Starred coins that still exist on the venue, shown above the full list so
+  // the menu opens on the ones this desk is actually used for.
+  const pinned = useMemo(
+    () => favs.map((c) => sorted.find((m) => m.coin === c)).filter((m): m is MarketRow => Boolean(m)),
+    [favs, sorted],
+  );
+
+  const row = (m: MarketRow) => {
+    const on = favs.includes(m.coin);
+    return (
+      <div key={m.coin} className="hl-picker__row">
+        <button
+          type="button"
+          role="option"
+          aria-selected={m.coin === coin}
+          className={m.coin === coin ? "is-on" : ""}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onPick(m.coin);
+            setOpen(false);
+          }}
+        >
+          <span>{m.coin}</span>
+          <i className="num">{fmt(m.markPx)}</i>
+        </button>
+        <button
+          type="button"
+          className={`hl-picker__star ${on ? "is-on" : ""}`}
+          aria-label={on ? `unstar ${m.coin}` : `star ${m.coin}`}
+          title={readOnly ? "favorites are read-only on the snapshot" : on ? `remove ${m.coin} from favorites` : `save ${m.coin} to favorites`}
+          disabled={readOnly}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleFav(m.coin);
+          }}
+        >
+          {on ? "★" : "☆"}
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="hl-picker">
@@ -85,27 +142,27 @@ function TokenPicker({ markets, coin, onPick }: { markets: MarketRow[]; coin: st
           setQ("");
         }}
         onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setOpen(false);
+            e.currentTarget.blur();
+          }
+        }}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
       />
       {open ? (
         <div className="hl-picker__list" role="listbox">
-          {list.slice(0, 80).map((m) => (
-            <button
-              key={m.coin}
-              type="button"
-              role="option"
-              aria-selected={m.coin === coin}
-              className={m.coin === coin ? "is-on" : ""}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onPick(m.coin);
-                setOpen(false);
-              }}
-            >
-              <span>{m.coin}</span>
-              <i className="num">{fmt(m.markPx)}</i>
-            </button>
-          ))}
+          {pinned.length && !q.trim() ? (
+            <>
+              <span className="hl-picker__group">starred</span>
+              {pinned.map(row)}
+              <span className="hl-picker__group">all tokens</span>
+            </>
+          ) : null}
+          {list
+            .filter((m) => q.trim() || !favs.includes(m.coin))
+            .slice(0, 80)
+            .map(row)}
           {list.length === 0 ? <span className="hl-picker__empty">no token matches that</span> : null}
         </div>
       ) : null}
@@ -113,7 +170,7 @@ function TokenPicker({ markets, coin, onPick }: { markets: MarketRow[]; coin: st
   );
 }
 
-export function ChartTab({ markets }: { markets: MarketRow[] }) {
+export function ChartTab({ markets, readOnly = false }: { markets: MarketRow[]; readOnly?: boolean }) {
   const [coin, setCoin] = useState("BTC");
   const [interval, setInterval] = useState("15m");
   const [data, setData] = useState<ChartPayload | null>(null);
@@ -122,6 +179,44 @@ export function ChartTab({ markets }: { markets: MarketRow[] }) {
   const [showInd, setShowInd] = useState(true);
   const [measure, setMeasure] = useState<{ a: Point; b: Point | null } | null>(null);
   const [armed, setArmed] = useState(false);
+  const [favs, setFavs] = useState<string[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/favorites")
+      .then((r) => r.json())
+      .then((body: { ok: boolean; coins?: string[] }) => {
+        if (alive && body.ok && Array.isArray(body.coins)) setFavs(body.coins);
+      })
+      .catch(() => {
+        /* a missing endpoint just means no stars */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const toggleFav = async (target: string) => {
+    if (readOnly) return;
+    const before = favs;
+    const on = before.includes(target);
+    setFavs(on ? before.filter((c) => c !== target) : [...before, target]);
+    try {
+      const res = await fetch(on ? `/api/favorites/${encodeURIComponent(target)}` : "/api/favorites", {
+        method: on ? "DELETE" : "POST",
+        headers: on ? undefined : { "content-type": "application/json" },
+        body: on ? undefined : JSON.stringify({ coin: target }),
+      });
+      const body = (await res.json()) as { ok: boolean; coins?: string[] };
+      if (!body.ok || !Array.isArray(body.coins)) throw new Error("not saved");
+      setFavs(body.coins);
+    } catch {
+      setFavs(before);
+    }
+  };
+
+  const starred = favs.includes(coin);
+  const quick = favs.filter((c) => markets.some((m) => m.coin === c));
 
   const armedRef = useRef(false);
   useEffect(() => {
@@ -305,7 +400,24 @@ export function ChartTab({ markets }: { markets: MarketRow[] }) {
     <section className="hl-panel hl-panel--fill">
       <div className="hl-panel__head hl-chartbar">
         <h2 className="lab">CHART</h2>
-        <TokenPicker markets={markets} coin={coin} onPick={setCoin} />
+        <TokenPicker
+          markets={markets}
+          coin={coin}
+          onPick={setCoin}
+          favs={favs}
+          onToggleFav={(c) => void toggleFav(c)}
+          readOnly={readOnly}
+        />
+        <button
+          type="button"
+          className={`chip hl-fav ${starred ? "is-on" : ""}`}
+          disabled={readOnly}
+          aria-pressed={starred}
+          title={readOnly ? "favorites are read-only on the snapshot" : starred ? `remove ${coin} from favorites` : `save ${coin} to favorites`}
+          onClick={() => void toggleFav(coin)}
+        >
+          {starred ? "★ saved" : "☆ save"}
+        </button>
         <div className="hl-seg">
           {INTERVALS.map((i) => (
             <button key={i} type="button" className={`chip ${interval === i ? "is-on" : ""}`} onClick={() => setInterval(i)}>
@@ -343,6 +455,17 @@ export function ChartTab({ markets }: { markets: MarketRow[] }) {
           clear
         </button>
       </div>
+
+      {quick.length ? (
+        <div className="hl-favbar">
+          <span className="hl-lab">favorites</span>
+          {quick.map((c) => (
+            <button key={c} type="button" className={`chip ${c === coin ? "is-on" : ""}`} onClick={() => setCoin(c)}>
+              ★ {c}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {error ? <div className="hl-error">{error}</div> : null}
 
