@@ -246,8 +246,23 @@ export function createServer(deps: { following: Following; favorites: Favorites;
       }
     });
     await Promise.all(workers);
-    return { ok: true, wallets };
+    const view = gmxFollow.view();
+    return {
+      ok: true,
+      wallets,
+      webhook: view.webhook,
+      windowMinutes: view.windowMinutes,
+      alertsSent: view.alertsSent,
+      polledAt: view.polledAt,
+    };
   });
+
+  app.put<{ Body: { url?: string } }>("/api/gmx/following/webhook", async (req) => {
+    gmxFollow.setWebhook(String(req.body?.url ?? "").trim() || null);
+    return { ok: true, following: gmxFollow.view() };
+  });
+
+  app.post("/api/gmx/following/test", async () => ({ ok: await gmxFollow.testWebhook() }));
 
   app.post<{ Body: { addr?: string } }>("/api/gmx/following", async (req, reply) => {
     const addr = String(req.body?.addr ?? "");
@@ -320,11 +335,13 @@ async function main(): Promise<void> {
   console.log(`hl desk  http://localhost:${port}  (read only)`);
 
   following.start();
+  gmxFollow.start();
   void build();
   setInterval(() => void build(), REFRESH_MS);
 
   const shutdown = async () => {
     following.stop();
+    gmxFollow.stop();
     await app.close();
     process.exit(0);
   };

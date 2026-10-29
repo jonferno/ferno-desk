@@ -259,6 +259,17 @@ export function netPnl(r: PeriodRow): number {
   return Number.isFinite(raw) ? raw / 1e30 : 0;
 }
 
+/** Executed fills for one account since a unix second, for the alert poller. */
+export async function tradesSince(addr: string, fromSec: number): Promise<RawTrade[]> {
+  const body: { trades?: RawTrade[] } = await apiPost("/trades/search", {
+    address: addr,
+    fromTimestamp: fromSec,
+    toTimestamp: Math.floor(Date.now() / 1000),
+    limit: 100,
+  });
+  return (body.trades ?? []).filter((t) => t.eventName === "OrderExecuted");
+}
+
 export interface DailyStat {
   dayTimestamp: number;
   realizedPnl: string;

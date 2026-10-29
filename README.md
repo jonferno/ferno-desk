@@ -31,8 +31,10 @@ pane. Star any token to keep it: stars show at the top of the picker and as chip
 the handful of coins you actually trade are one click away.
 
 **Favourites.** Star any wallet, on both venues. Its card carries the same numbers as the leaderboard
-plus its newest fill and how that position is doing right now. Optional Discord webhook on the
-Hyperliquid side: one alert per token per 15 minutes, so a burst of fills does not spam the channel.
+plus its newest fill and how that position is doing right now. Both venues take their own Discord
+webhook from the FAVOURITES tab: each alert is an embed with the coin logo, price, notional, fill count
+and links to that venue's chart and the wallet, folded to one message per wallet per 15 minutes so a
+burst does not spam the channel.
 
 **GMX venue.** A switch in the header swaps the whole desk to GMX v2 on Arbitrum. The board is built
 from the venue's own `periodAccountStats` rows, so PnL and ROI match app.gmx.io: PnL is realised PnL,

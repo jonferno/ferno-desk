@@ -3,6 +3,10 @@ import { join } from "node:path";
 import type { FollowedWallet, FollowingView } from "@shared/hl";
 import { info } from "./client";
 import { spotNameMap } from "./desk";
+import { alertPayload, iconFor, iconMap, postWebhook, testPayload } from "../alerts";
+
+/** Open Long / Close Short / Buy add to a long; the rest reduce it. */
+const isBuyFill = (dir: string) => dir.startsWith("Open Long") || dir.startsWith("Close Short") || dir === "Buy";
 
 /**
  * Following list and trade alerts.
@@ -135,26 +139,16 @@ export class Following {
 
   async testWebhook(): Promise<boolean> {
     if (!this.store.webhook) return false;
-    return this.post("HL DESK test message. Alerts are wired up.");
+    return this.post(testPayload("hyperliquid"));
   }
 
   isFollowing(addr: string): boolean {
     return this.store.wallets.some((w) => w.addr.toLowerCase() === addr.toLowerCase());
   }
 
-  private async post(content: string): Promise<boolean> {
+  private async post(body: unknown): Promise<boolean> {
     if (!this.store.webhook) return false;
-    try {
-      const res = await fetch(this.store.webhook, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ content, username: "HL DESK" }),
-        signal: AbortSignal.timeout(10_000),
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
+    return postWebhook(this.store.webhook, body);
   }
 
   private async poll(): Promise<void> {
@@ -186,20 +180,31 @@ export class Following {
           }
 
           const names = await spotNameMap();
+          const icons = await iconMap();
           for (const [coin, list] of byCoin) {
             const key = `${w.addr.toLowerCase()}:${coin}`;
             if (now - (this.lastAlert.get(key) ?? 0) < WINDOW_MS) continue;
             this.lastAlert.set(key, now);
             const first = list[0]!;
+            const size = list.reduce((a, f) => a + Number(f.sz), 0);
             const notional = list.reduce((a, f) => a + Number(f.sz) * Number(f.px), 0);
-            const dir = first.dir;
             const label = names.get(coin) ?? coin;
-            const lines = [
-              `**${w.addr.slice(0, 6)}…${w.addr.slice(-4)}** · ${label} · ${dir}`,
-              `${list.length} fill${list.length === 1 ? "" : "s"} · ${notional.toFixed(0)} USDC notional`,
-              `price ${Number(first.px)} · ${new Date(now).toLocaleTimeString()}`,
-            ];
-            if (await this.post(lines.join("\n"))) this.alertsSent++;
+            const buy = isBuyFill(first.dir);
+            const payload = alertPayload({
+              venue: "hyperliquid",
+              coin: label,
+              side: buy ? "buy" : "sell",
+              size,
+              notional,
+              price: Number(first.px),
+              wallet: w.addr,
+              fills: list.length,
+              chartUrl: `https://app.hyperliquid.xyz/trade/${encodeURIComponent(coin)}`,
+              explorerUrl: `https://app.hyperliquid.xyz/explorer/address/${w.addr}`,
+              iconUrl: iconFor(label.split("/")[0] ?? label, icons),
+              windowMinutes: WINDOW_MS / 60_000,
+            });
+            if (await this.post(payload)) this.alertsSent++;
           }
         } catch {
           /* one wallet failing must not stop the others */
