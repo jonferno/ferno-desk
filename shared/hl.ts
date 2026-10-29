@@ -14,6 +14,11 @@ export interface LeaderRow {
   /** Closing fills in the last 48h that ended in profit, and those that did not. */
   wins48?: number | null;
   losses48?: number | null;
+  /** Fill counts from the venue's last 2000 fills; null when unknown. */
+  trades7d?: number | null;
+  trades30d?: number | null;
+  /** True when the venue's 2000-fill page was full, so the counts are floors. */
+  tradesCapped?: boolean;
   verdict: "consistent" | "lucky" | "thin";
   /** Which test the wallet failed, when it is a near miss. */
   reason?: string;

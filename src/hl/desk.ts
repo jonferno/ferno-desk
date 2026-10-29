@@ -75,6 +75,20 @@ interface Fills24 {
   losses: number;
 }
 
+/**
+ * 7d and 30d fill counts from the venue's last page of fills.
+ *
+ * `userFills` returns at most 2000, newest first, so a full page means the
+ * counts are floors rather than exact totals.
+ */
+async function fillCounts(addr: string): Promise<{ d7: number; d30: number; capped: boolean }> {
+  const now = Date.now();
+  const fills = await info<Array<{ time: number }>>({ type: "userFills", user: addr });
+  const d7 = fills.filter((f) => now - f.time < 7 * 86_400_000).length;
+  const d30 = fills.filter((f) => now - f.time < 30 * 86_400_000).length;
+  return { d7, d30, capped: fills.length >= 2000 };
+}
+
 async function fillsSince(addr: string, hours: number): Promise<Fills24> {
   const now = Date.now();
   const fills = await info<Array<{ coin: string; closedPnl?: string }>>({
@@ -139,6 +153,9 @@ interface CacheEntry extends Stats {
   coins?: number;
   wins48?: number;
   losses48?: number;
+  t7d?: number;
+  t30d?: number;
+  tCapped?: boolean;
   /** Live window PnL and return, so the board and the favourites card agree. */
   pnl?: number;
   roi?: number;
@@ -256,6 +273,15 @@ export async function screenLeaderboard(limit = 25, nearLimit = 14): Promise<Scr
       }
     }
 
+    try {
+      const c = await fillCounts(r.addr);
+      hit.t7d = c.d7;
+      hit.t30d = c.d30;
+      hit.tCapped = c.capped;
+    } catch {
+      /* leave the last known counts */
+    }
+
     const fails: string[] = [];
     let trades: number | null = null;
     let coins: number | null = null;
@@ -295,6 +321,9 @@ export async function screenLeaderboard(limit = 25, nearLimit = 14): Promise<Scr
       coins24h: coins,
       wins48: hit.wins48 ?? null,
       losses48: hit.losses48 ?? null,
+      trades7d: hit.t7d ?? null,
+      trades30d: hit.t30d ?? null,
+      tradesCapped: Boolean(hit.tCapped),
       verdict: fails.length ? "lucky" : "consistent",
       reason: fails.join(", "),
     };

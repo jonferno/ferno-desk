@@ -8,7 +8,10 @@ const money = (n: number) => {
 };
 const pct = (n: number, d = 1) => `${(n * 100).toFixed(d)}%`;
 
-type Col = keyof Pick<LeaderRow, "pnl30" | "roi30" | "wins48" | "greenDays" | "worstDay" | "concentration" | "trades24h">;
+type Col = keyof Pick<
+  LeaderRow,
+  "pnl30" | "roi30" | "wins48" | "greenDays" | "worstDay" | "concentration" | "trades24h" | "trades7d" | "trades30d"
+>;
 
 const COLS: Array<{ key: Col; label: string; hint: string }> = [
   { key: "pnl30", label: "30D P&L", hint: "headline profit, not a quality signal" },
@@ -18,6 +21,8 @@ const COLS: Array<{ key: Col; label: string; hint: string }> = [
   { key: "worstDay", label: "WORST", hint: "worst single day" },
   { key: "concentration", label: "BEST/TOT", hint: "share of profit from the single best day" },
   { key: "trades24h", label: "48H", hint: "fills in the last 48 hours" },
+  { key: "trades7d", label: "7D", hint: "fills in the last 7 days, from the venue's last 2000" },
+  { key: "trades30d", label: "30D", hint: "fills in the last 30 days, from the venue's last 2000" },
 ];
 
 function Table({
@@ -97,6 +102,8 @@ function Table({
               <td className="num is-down">{money(r.worstDay)}</td>
               <td className={`num ${r.concentration >= 0.55 ? "is-down" : ""}`}>{pct(r.concentration, 0)}</td>
               <td className="num">{r.trades24h ?? "·"}</td>
+              <td className="num">{r.trades7d != null ? `${r.trades7d}${r.tradesCapped ? "+" : ""}` : "·"}</td>
+              <td className="num">{r.trades30d != null ? `${r.trades30d}${r.tradesCapped ? "+" : ""}` : "·"}</td>
               {showReason ? <td className="hl-reason">{r.reason || "-"}</td> : null}
             </tr>
           ))}
