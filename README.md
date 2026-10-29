@@ -1,4 +1,4 @@
-# HL DESK: a self-hosted perp research desk
+# FERNO DESK: a self-hosted perp research desk
 
 Read-only research over Hyperliquid and GMX v2 perps. It screens trader wallets, replays the last 48
 hours of their fills to work out what they actually built, charts price with a MACD pane, and can post
@@ -36,11 +36,12 @@ minutes, so a burst of fills does not spam the channel.
 **GMX venue.** A switch in the header swaps the whole desk to GMX v2 on Arbitrum. The board is built
 from the venue's own `periodAccountStats` rows, so PnL and ROI match app.gmx.io: PnL is realised PnL,
 and ROI is net realised PnL after fees, price impact and positive funding, over the capital used in
-the window. Rows carry volume, average size, average leverage, win/loss and trade count. The wallet
-page reads live positions from the GMX API (entry, mark, liquidation, leverage, PnL percent) and the
-last 48 hours of executed trades from `/trades/search`. Windows are 7d and 30d, day aligned because
-GMX's resolver only accepts UTC midnight. GMX has no equity curve, so there is no equity timeline; the
-chart and following tabs are Hyperliquid-only for now.
+the window. Rows carry volume, average size, average leverage, win/loss and trade count, every column
+sorts, and the same star as the Hyperliquid side saves a wallet to a GMX favourites tab. The wallet
+page reads live positions from the GMX API (entry, mark, liquidation, leverage, collateral and PnL)
+and the last 48 hours of executed trades from `/trades/search`. Because GMX publishes no account value
+history, the chart is cumulative realised PnL over 30 days from the day-level `accountStats` rows, not
+an equity curve. Windows are 7d and 30d, day aligned because GMX's resolver only accepts UTC midnight.
 
 **Passcode gate.** Set `SITE_PASSCODE` and every page and `/api/*` route needs it, with an HttpOnly
 HMAC cookie and a 10-attempt / 10-minute lockout. Leave it empty to run open on your own box.

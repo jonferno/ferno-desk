@@ -182,8 +182,7 @@ export async function trades(addr: string, hours = 48): Promise<RawTrade[]> {
   return out.filter((t) => t.eventName === "OrderExecuted").sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
 }
 
-export interface PeriodRow {
-  id: string;
+export interface PeriodRow {  id: string;
   realizedPnl?: string;
   realizedFees?: string;
   realizedSwapFees?: string;
@@ -248,6 +247,30 @@ export function netPnl(r: PeriodRow): number {
     Number(r.realizedSwapImpact ?? 0) +
     Number(r.positiveFundingFeesUsd ?? 0);
   return Number.isFinite(raw) ? raw / 1e30 : 0;
+}
+
+export interface DailyStat {
+  dayTimestamp: number;
+  realizedPnl: string;
+}
+
+const DAILY_QUERY = `
+query Daily($a: String!, $from: Int!) {
+  accountStats(where: { account_eq: $a, period_eq: "1d", dayTimestamp_gte: $from }, orderBy: dayTimestamp_ASC, limit: 40) {
+    dayTimestamp
+    realizedPnl
+  }
+}
+`;
+
+/** Daily realised PnL rows for one account, oldest first. */
+export async function dailyStats(addr: string, fromTs: number): Promise<DailyStat[]> {
+  try {
+    const data = await gql<{ accountStats: DailyStat[] }>(DAILY_QUERY, { a: addr, from: fromTs });
+    return data.accountStats ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export { usd };

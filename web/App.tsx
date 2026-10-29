@@ -7,9 +7,10 @@ import { ChartTab } from "./components/hl/ChartTab";
 import { Following } from "./components/hl/Following";
 import { GmxBoardTable } from "./components/gmx/Board";
 import { GmxWalletView } from "./components/gmx/Wallet";
+import { GmxFollowingView } from "./components/gmx/Following";
 
 type Tab = "board" | "wallet" | "chart" | "following";
-type GmxTab = "board" | "wallet";
+type GmxTab = "board" | "wallet" | "following";
 type Venue = "hl" | "gmx";
 
 const TABS: Array<{ id: Tab; label: string }> = [
@@ -22,6 +23,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
 const GMX_TABS: Array<{ id: GmxTab; label: string }> = [
   { id: "board", label: "LEADERBOARD" },
   { id: "wallet", label: "WALLET" },
+  { id: "following", label: "FAVOURITES" },
 ];
 
 const VENUE_KEY = "hl-desk-venue";
@@ -43,6 +45,7 @@ export default function App() {
   const [gmxBoard, setGmxBoard] = useState<GmxBoard | null>(null);
   const [gmxError, setGmxError] = useState<string | null>(null);
   const [gmxWindow, setGmxWindow] = useState<"7d" | "30d">("30d");
+  const [gmxFollowed, setGmxFollowed] = useState<Set<string>>(new Set());
   const [followed, setFollowed] = useState<Set<string>>(new Set());
   // On the public host a shim answers /api from a snapshot; it sets this flag.
   const [isStatic, setIsStatic] = useState<boolean>(
@@ -114,6 +117,42 @@ export default function App() {
     };
   }, [venue, gmxWindow]);
 
+  const loadGmxFollow = useCallback(async () => {
+    try {
+      const res = await fetch("/api/gmx/following");
+      const body = (await res.json()) as { ok: boolean; wallets?: Array<{ addr: string }> };
+      if (body.ok) setGmxFollowed(new Set((body.wallets ?? []).map((w) => w.addr.toLowerCase())));
+    } catch {
+      /* keep the last set */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadGmxFollow();
+  }, [loadGmxFollow, venue]);
+
+  const toggleGmxFollow = useCallback(
+    async (addr: string) => {
+      const on = gmxFollowed.has(addr.toLowerCase());
+      setGmxFollowed((prev) => {
+        const next = new Set(prev);
+        if (on) next.delete(addr.toLowerCase());
+        else next.add(addr.toLowerCase());
+        return next;
+      });
+      try {
+        await fetch(on ? `/api/gmx/following/${addr}` : "/api/gmx/following", {
+          method: on ? "DELETE" : "POST",
+          headers: on ? undefined : { "content-type": "application/json" },
+          body: on ? undefined : JSON.stringify({ addr }),
+        });
+      } finally {
+        void loadGmxFollow();
+      }
+    },
+    [gmxFollowed, loadGmxFollow],
+  );
+
   const pick = useCallback((row: LeaderRow) => {
     setPicked(row.addr);
     setTab("wallet");
@@ -148,10 +187,10 @@ export default function App() {
           <span className="hl-brand__mark" aria-hidden="true" />
           <div>
             <h1 className="hl-brand__title">
-              {isGmx ? "GMX" : "HL"} <span>DESK</span>
+              FERNO <span>DESK</span>
             </h1>
             <p className="hl-brand__sub">
-              {isGmx ? "gmx v2 research · arbitrum · read only" : "hyperliquid research · read only · no wallet"}
+              {isGmx ? "perp research · gmx v2 · arbitrum" : "perp research · hyperliquid · read only"}
             </p>
           </div>
         </div>
@@ -225,13 +264,29 @@ export default function App() {
               board={gmxBoard}
               windowId={gmxWindow}
               onWindow={setGmxWindow}
+              followed={gmxFollowed}
+              onToggleFollow={(addr) => void toggleGmxFollow(addr)}
               onPick={(addr) => {
                 setPickedGmx(addr);
                 setGmxTab("wallet");
               }}
             />
+          ) : gmxTab === "wallet" ? (
+            <GmxWalletView
+              addr={pickedGmx}
+              following={pickedGmx ? gmxFollowed.has(pickedGmx.toLowerCase()) : false}
+              onToggleFollow={() => {
+                if (pickedGmx) void toggleGmxFollow(pickedGmx);
+              }}
+            />
           ) : (
-            <GmxWalletView addr={pickedGmx} />
+            <GmxFollowingView
+              onPick={(addr) => {
+                setPickedGmx(addr);
+                setGmxTab("wallet");
+              }}
+              onRemove={(addr) => void toggleGmxFollow(addr)}
+            />
           )
         ) : tab === "board" ? (
           <Leaderboard rows={desk?.leaderboard ?? []} near={desk?.nearMiss ?? []} onPick={pick} followed={followed} />

@@ -32,7 +32,7 @@ function parseCookies(header?: string): Record<string, string> {
 const LOGIN_HTML = `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<meta name="theme-color" content="#03050c"/><title>HL DESK · private</title>
+<meta name="theme-color" content="#03050c"/><title>FERNO DESK · private</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet"/>
@@ -54,7 +54,7 @@ const LOGIN_HTML = `<!doctype html>
   .err{min-height:16px;margin-top:10px;font-size:11px;color:#ff8c42}
 </style></head><body>
 <div class="card">
-  <h1>HL <span>DESK</span></h1>
+  <h1>FERNO <span>DESK</span></h1>
   <p class="sub">private · passcode required</p>
   <input id="code" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="••••••" autofocus/>
   <button id="go">UNLOCK</button>

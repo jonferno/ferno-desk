@@ -59,4 +59,10 @@ export interface GmxWallet {
   tradesTotal: number;
   /** Window stats when the address is on the board, otherwise null. */
   row: GmxRow | null;
+  /** Cumulative realised PnL over 30 days, one point per day. */
+  curve: Array<{ t: number; v: number }>;
+  /** Sum of open position PnL in USD. */
+  unrealized: number;
+  /** Sum of collateral locked in open positions, in USD. */
+  collateral: number;
 }

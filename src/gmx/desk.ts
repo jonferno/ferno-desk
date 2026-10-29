@@ -1,5 +1,5 @@
 import type { GmxBoard, GmxPosition, GmxRow, GmxTrade, GmxWallet } from "@shared/gmx";
-import { boardRows, marketMap, positions, trades, usd, netPnl, type PeriodRow } from "./client";
+import { boardRows, dailyStats, marketMap, positions, trades, usd, netPnl, type PeriodRow } from "./client";
 
 /**
  * GMX screen and wallet detail.
@@ -81,6 +81,18 @@ export async function gmxWallet(addr: string): Promise<GmxWallet> {
     gmxBoard("30d").catch(() => null),
   ]);
 
+  const row = board?.rows.find((r) => r.addr.toLowerCase() === addr.toLowerCase()) ?? null;
+  // The index compares addresses exactly, and the board carries the venue's
+  // checksummed casing, which is the one that returns rows.
+  const canonical = row?.addr ?? addr;
+  const daily = await dailyStats(canonical, midnight() - 30 * 86_400);
+
+  let running = 0;
+  const curve = daily.map((d) => {
+    running += usd(d.realizedPnl);
+    return { t: d.dayTimestamp * 1000, v: running };
+  });
+
   const label = (marketAddress?: string, indexName?: string) => {
     if (indexName) return indexName;
     const hit = marketAddress ? map.get(marketAddress.toLowerCase()) : undefined;
@@ -118,7 +130,17 @@ export async function gmxWallet(addr: string): Promise<GmxWallet> {
     // nor pnl carries nothing a reader can use.
     .filter((t) => t.sizeUsd > 0 || t.pnlUsd !== 0);
 
-  const row = board?.rows.find((r) => r.addr.toLowerCase() === addr.toLowerCase()) ?? null;
+  const unrealized = rows.reduce((sum, p) => sum + p.pnlUsd, 0);
+  const collateral = rows.reduce((sum, p) => sum + p.collateralUsd, 0);
 
-  return { addr, positions: rows, trades: tradeRows, tradesTotal: tradeRows.length, row };
+  return {
+    addr: canonical,
+    positions: rows,
+    trades: tradeRows,
+    tradesTotal: tradeRows.length,
+    row,
+    curve,
+    unrealized,
+    collateral,
+  };
 }

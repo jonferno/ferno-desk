@@ -3238,6 +3238,25 @@ kbd {
   font-size: 11px;
 }
 
+.hl-star-btn {
+  border: 0;
+  background: transparent;
+  padding: 0 6px 0 0;
+  font-size: 12px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.hl-star-btn:hover {
+  color: #ffd166;
+}
+
+.hl-star-btn.is-on {
+  color: #ffb347;
+}
+
 .hl-stale {
   margin: 0 0 10px;
   padding: 5px 8px;

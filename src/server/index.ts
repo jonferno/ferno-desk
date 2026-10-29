@@ -8,6 +8,7 @@ import { Following } from "../hl/follow";
 import { Favorites } from "../hl/favorites";
 import { registerAuth } from "./auth";
 import { gmxBoard, gmxWallet } from "../gmx/desk";
+import { GmxFollowing } from "../gmx/follow";
 import type { GmxWallet } from "@shared/gmx";
 
 /**
@@ -50,9 +51,9 @@ async function build(): Promise<void> {
   return building;
 }
 
-export function createServer(deps: { following: Following; favorites: Favorites }) {
+export function createServer(deps: { following: Following; favorites: Favorites; gmxFollow: GmxFollowing }) {
   const app = Fastify({ logger: false, trustProxy: true });
-  const { following, favorites } = deps;
+  const { following, favorites, gmxFollow } = deps;
   registerAuth(app, process.env.SITE_PASSCODE ?? "");
 
   app.get("/api/health", async () => ({
@@ -204,8 +205,28 @@ export function createServer(deps: { following: Following; favorites: Favorites 
     }
   });
 
-  app.get<{ Params: { addr: string } }>("/api/gmx/wallet/:addr", async (req, reply) => {
-    const addr = String(req.params.addr ?? "");
+  app.get("/api/gmx/following", async () => {
+    const board = await gmxBoard("30d").catch(() => null);
+    const wallets = gmxFollow.list().map((addr) => ({
+      addr,
+      row: board?.rows.find((r) => r.addr.toLowerCase() === addr.toLowerCase()) ?? null,
+    }));
+    return { ok: true, wallets };
+  });
+
+  app.post<{ Body: { addr?: string } }>("/api/gmx/following", async (req, reply) => {
+    const addr = String(req.body?.addr ?? "");
+    if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) return reply.code(400).send({ ok: false, error: "bad address" });
+    gmxFollow.add(addr);
+    return { ok: true, wallets: gmxFollow.list() };
+  });
+
+  app.delete<{ Params: { addr: string } }>("/api/gmx/following/:addr", async (req) => ({
+    ok: true,
+    wallets: gmxFollow.remove(String(req.params.addr)),
+  }));
+
+  app.get<{ Params: { addr: string } }>("/api/gmx/wallet/:addr", async (req, reply) => {    const addr = String(req.params.addr ?? "");
     if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) return reply.code(400).send({ ok: false, error: "bad address" });
     const key = addr.toLowerCase();
     const hit = gmxWallets.get(key);
@@ -258,7 +279,8 @@ async function main(): Promise<void> {
   const dataDir = process.env.DATA_DIR ?? resolve(import.meta.dirname, "../../data");
   const following = new Following(dataDir);
   const favorites = new Favorites(dataDir);
-  const { app } = createServer({ following, favorites });
+  const gmxFollow = new GmxFollowing(dataDir);
+  const { app } = createServer({ following, favorites, gmxFollow });
   await app.listen({ port, host: "127.0.0.1" });
   console.log(`hl desk  http://localhost:${port}  (read only)`);
 
