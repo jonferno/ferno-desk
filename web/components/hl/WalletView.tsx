@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { WalletDetail } from "@shared/hl";
+import type { PerpPosition, WalletDetail } from "@shared/hl";
 
 const money = (n: number) => {
   const a = Math.abs(n);
@@ -8,6 +8,10 @@ const money = (n: number) => {
 };
 const px = (n: number) =>
   n >= 1000 ? n.toLocaleString(undefined, { maximumFractionDigits: 2 }) : n >= 1 ? n.toFixed(3) : n.toFixed(5);
+
+/** Unlevered price move from the window's average entry, signed for the side. */
+const movePct = (p: PerpPosition) =>
+  p.entryPx > 0 ? ((p.markPx - p.entryPx) / p.entryPx) * (p.size > 0 ? 100 : -100) : null;
 
 const clock = (ms: number) =>
   new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -58,6 +62,10 @@ function EquityChart({ points }: { points: WalletDetail["curve"] }) {
   const up = Boolean(first && last && last.value >= first.value);
   const delta = first && last ? last.value - first.value : 0;
   const pct = first && first.value ? (delta / first.value) * 100 : 0;
+  // A wallet funded with a few dollars and grown into millions reads as
+  // +63,000%, which tells nobody anything. Past 999% show the multiple.
+  const multiple = first && first.value ? (last?.value ?? first.value) / first.value : 0;
+  const change = Math.abs(pct) >= 999 ? `${multiple.toFixed(multiple >= 10 ? 0 : 1)}×` : `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
 
   useEffect(() => {
     const LC = (window as unknown as { LightweightCharts?: LCModule }).LightweightCharts;
@@ -101,9 +109,8 @@ function EquityChart({ points }: { points: WalletDetail["curve"] }) {
           ))}
         </div>
         <span className="hl-grow" />
-        <span className={`hl-note num ${delta >= 0 ? "is-up" : "is-down"}`}>
-          {money(delta)} ({pct >= 0 ? "+" : ""}
-          {pct.toFixed(1)}%)
+        <span className={`hl-note num ${delta >= 0 ? "is-up" : "is-down"}`} title={`${money(first?.value ?? 0)} to ${money(last?.value ?? 0)}`}>
+          {money(delta)} ({change})
         </span>
       </div>
       {series.length < 2 ? (
@@ -237,7 +244,7 @@ export function WalletView({ addr }: { addr: string | null }) {
               <span className="lab">positions from the last 48h</span>
               <span className="hl-grow" />
               <span className="hl-note">
-                {data.positions.length} perp · {data.spot.length} spot · built from fills only
+                {data.positions.length} perp · {data.spot.length} spot · from fills, leverage from the venue
               </span>
             </div>
 
@@ -254,6 +261,7 @@ export function WalletView({ addr }: { addr: string | null }) {
                         <tr>
                           <th>COIN</th>
                           <th>SIDE</th>
+                          <th title="leverage the venue has set on this coin, not rebuildable from fills">LEV</th>
                           <th>SIZE</th>
                           <th>AVG ENTRY</th>
                           <th>MARK</th>
@@ -262,34 +270,38 @@ export function WalletView({ addr }: { addr: string | null }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.positions.map((p) => (
-                          <tr
-                            key={p.coin}
-                            title={
-                              p.venueSize != null && Math.abs(p.venueSize - p.size) > 1e-6
-                                ? `venue total ${p.venueSize} (older trades included), ${p.size} opened in this window`
-                                : undefined
-                            }
-                          >
-                            <td className="hl-coin">{p.name ?? p.coin}</td>
-                            <td className={p.size > 0 ? "is-up" : "is-down"}>{p.size > 0 ? "LONG" : "SHORT"}</td>
-                            <td className="num">{Math.abs(p.size).toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
-                            <td className="num">{px(p.entryPx)}</td>
-                            <td className="num">{px(p.markPx)}</td>
-                            <td
-                              className={`num ${p.unrealizedPnl >= 0 ? "is-up" : "is-down"}`}
-                              title={money(p.unrealizedPnl)}
+                        {data.positions.map((p) => {
+                          const move = movePct(p);
+                          return (
+                            <tr
+                              key={p.coin}
+                              title={
+                                p.venueSize != null && Math.abs(p.venueSize - p.size) > 1e-6
+                                  ? `venue total ${p.venueSize} (older trades included), ${p.size} opened in this window`
+                                  : undefined
+                              }
                             >
-                              {p.entryPx > 0
-                                ? `${p.unrealizedPnl >= 0 ? "+" : ""}${(
-                                    ((p.markPx - p.entryPx) / p.entryPx) *
-                                    (p.size > 0 ? 100 : -100)
-                                  ).toFixed(1)}%`
-                                : "-"}
-                            </td>
-                            <td className="num">{p.fills}</td>
-                          </tr>
-                        ))}
+                              <td className="hl-coin">{p.name ?? p.coin}</td>
+                              <td className={p.size > 0 ? "is-up" : "is-down"}>{p.size > 0 ? "LONG" : "SHORT"}</td>
+                              <td className="num">{p.leverage ? `${p.leverage}x` : "-"}</td>
+                              <td className="num">{Math.abs(p.size).toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
+                              <td className="num">{px(p.entryPx)}</td>
+                              <td className="num">{px(p.markPx)}</td>
+                              <td
+                                className={`num ${move == null ? "" : move >= 0 ? "is-up" : "is-down"}`}
+                                title={
+                                  move == null
+                                    ? money(p.unrealizedPnl)
+                                    : `${money(p.unrealizedPnl)} · price move ${move >= 0 ? "+" : ""}${move.toFixed(2)}%` +
+                                      (p.leverage ? ` · ${(move * p.leverage).toFixed(1)}% on ${p.leverage}x margin` : "")
+                                }
+                              >
+                                {move == null ? "-" : `${move >= 0 ? "+" : ""}${move.toFixed(1)}%`}
+                              </td>
+                              <td className="num">{p.fills}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   )}

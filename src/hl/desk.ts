@@ -329,8 +329,14 @@ export async function walletFillsPage(addr: string, offset: number, limit: numbe
   };
 }
 
+interface VenuePosition {
+  coin: string;
+  szi: string;
+  leverage?: { type?: string; value?: number };
+}
+
 interface ClearinghouseState {
-  assetPositions?: Array<{ position?: { coin: string; szi: string } }>;
+  assetPositions?: Array<{ position?: VenuePosition }>;
 }
 
 interface SpotState {
@@ -384,17 +390,20 @@ async function windowPositions(
 ): Promise<{ positions: PerpPosition[]; spot: SpotBalance[] }> {
   const [priceMap, names] = await Promise.all([mids(), spotNameMap()]);
 
-  let venueSizes = new Map<string, number>();
+  let venue = new Map<string, { size: number; leverage: number | null }>();
   try {
     const state = await info<ClearinghouseState>({ type: "clearinghouseState", user: addr });
-    venueSizes = new Map(
+    venue = new Map(
       (state.assetPositions ?? [])
         .map((a) => a.position)
-        .filter((p): p is { coin: string; szi: string } => Boolean(p?.coin))
-        .map((p) => [p.coin, Number(p.szi)]),
+        .filter((p): p is VenuePosition => Boolean(p?.coin))
+        .map((p) => {
+          const lev = Number(p.leverage?.value);
+          return [p.coin, { size: Number(p.szi), leverage: Number.isFinite(lev) && lev > 0 ? lev : null }];
+        }),
     );
   } catch {
-    /* the venue size is only context */
+    /* the venue size and leverage are only context */
   }
 
   const perp = new Map<string, Bucket>();
@@ -425,7 +434,8 @@ async function windowPositions(
       unrealizedPnl: (mark - b.a) * b.q,
       fills: b.fills,
       since: b.since,
-      venueSize: venueSizes.get(coin) ?? null,
+      venueSize: venue.get(coin)?.size ?? null,
+      leverage: venue.get(coin)?.leverage ?? null,
     });
   }
 

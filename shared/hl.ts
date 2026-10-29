@@ -80,6 +80,11 @@ export interface PerpPosition {
   since: number;
   /** The venue's own total position, which may be older than the window. */
   venueSize: number | null;
+  /**
+   * Leverage the venue has set on this coin, e.g. 10 for 10x. Fills do not
+   * carry it, so it is null when the wallet no longer holds the coin.
+   */
+  leverage: number | null;
 }
 
 export interface SpotBalance {
