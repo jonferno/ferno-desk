@@ -21,7 +21,8 @@ the 48h trade list. The curve merges every portfolio window Hyperliquid returns 
 all time) so the last day is not a single point. Positions are rebuilt from the last 48h of fills only,
 with average-cost accounting,
 so "size 500 entered at 2,719" from a trade three weeks ago does not show up as a current position.
-The venue's own total is kept as a hover hint when it differs. Trades page 50 at a time.
+Each row carries the venue's leverage; the percent is the unlevered price move, and hovering it shows the
+return on margin. The venue's own total is kept as a hover hint when it differs. Trades page 50 at a time.
 
 **Chart.** Alphabetical, searchable token picker; blue up / orange down candles; a measure tool you
 arm with a button and finish with two clicks; MACD 12/26/9 plus a zero-lag band aligned to the price
