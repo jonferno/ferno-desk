@@ -81,6 +81,11 @@ failed lookup falls back to the last good copy.
 Two data rules worth knowing:
 
 - `pnlHistory` is cumulative, so daily figures come from differences, never raw points.
+- ROI is chained from the account's own equity and pnl samples, not `pnl / current equity`. The
+  plain ratio reads 400% on a wallet that just withdrew most of its money; chaining keeps deposits
+  and withdrawals neutral.
+- Hyperliquid throttles by IP. A wallet request that still fails after retries falls back to the
+  last good copy, and the page says how old it is.
 - Spot fills arrive with asset ids like `@272`. They are mapped through `spotMeta` to `UZEC/USDC`
   and friends before display.
 

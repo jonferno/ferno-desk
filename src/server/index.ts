@@ -19,6 +19,7 @@ const WALLET_TTL_MS = 5 * 60_000;
 let cache: DeskSnapshot | null = null;
 let building: Promise<void> | null = null;
 const wallets = new Map<string, { at: number; data: WalletDetail }>();
+const inflightWallets = new Map<string, Promise<WalletDetail>>();
 const chartCache = new Map<string, { at: number; payload: unknown }>();
 const statsCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof walletStats>> | null }>();
 const STATS_TTL_MS = 5 * 60_000;
@@ -72,10 +73,21 @@ export function createServer(deps: { following: Following; favorites: Favorites 
     const hit = wallets.get(addr);
     if (hit && Date.now() - hit.at < WALLET_TTL_MS) return { ok: true, wallet: hit.data, following: following.isFollowing(addr) };
     try {
-      const data = await walletDetail(addr, 50);
+      // One load per wallet: two tabs opening the same address must not double
+      // the upstream calls that a throttle is already punishing.
+      let job = inflightWallets.get(addr);
+      if (!job) {
+        job = walletDetail(addr, 50).finally(() => inflightWallets.delete(addr));
+        inflightWallets.set(addr, job);
+      }
+      const data = await job;
       wallets.set(addr, { at: Date.now(), data });
       return { ok: true, wallet: data, following: following.isFollowing(addr) };
     } catch (err) {
+      // A throttle must not empty the page: the last good copy is better than
+      // an error, as long as the client says how old it is.
+      const stale = wallets.get(addr);
+      if (stale) return { ok: true, wallet: stale.data, following: following.isFollowing(addr), stale: true, staleAt: stale.at };
       return reply.code(502).send({ ok: false, error: (err as Error).message });
     }
   });

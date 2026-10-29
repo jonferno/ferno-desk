@@ -38,13 +38,34 @@ async function portfolio(addr: string): Promise<Record<string, { accountValueHis
 }
 
 /** pnlHistory is cumulative, so daily statistics come from the differences. */
-function dailyStats(cumulative: number[]): { pnl: number; greenDays: number; worstDay: number; concentration: number } {
-  const deltas = cumulative.slice(1).map((v, i) => v - cumulative[i]!);
+function dailyStats(cumulative: number[]): { pnl: number; greenDays: number; worstDay: number; concentration: number } {  const deltas = cumulative.slice(1).map((v, i) => v - cumulative[i]!);
   const pnl = cumulative.length ? cumulative[cumulative.length - 1]! : 0;
   const greenDays = deltas.length ? (100 * deltas.filter((d) => d > 0).length) / deltas.length : 0;
   const worstDay = deltas.length ? Math.min(...deltas) : 0;
   const best = deltas.length ? Math.max(...deltas) : 0;
   return { pnl, greenDays, worstDay, concentration: pnl > 0 ? best / pnl : 1 };
+}
+
+/**
+ * Return over a portfolio window, chained from the account's own history.
+ *
+ * Dividing the window's pnl by the *current* equity produced a 409% card for a
+ * wallet that had just withdrawn most of its money: the profit was real, the
+ * denominator had walked out of the door. Each sample's pnl step over the
+ * equity held before it, compounded, makes deposits and withdrawals neutral.
+ */
+function windowReturn(win?: { accountValueHistory?: [number, string][]; pnlHistory?: [number, string][] }): number | null {
+  const eq = win?.accountValueHistory ?? [];
+  const pn = win?.pnlHistory ?? [];
+  if (eq.length < 3 || pn.length !== eq.length) return null;
+  let growth = 1;
+  for (let i = 1; i < eq.length; i++) {
+    const prev = Number(eq[i - 1]![1]);
+    const step = Number(pn[i]![1]) - Number(pn[i - 1]![1]);
+    if (!(prev > 0) || !Number.isFinite(step)) continue;
+    growth *= 1 + step / prev;
+  }
+  return Number.isFinite(growth) ? growth - 1 : null;
 }
 
 interface Fills24 {
@@ -556,7 +577,7 @@ export async function walletStats(addr: string): Promise<{
   return {
     equity,
     pnl30: st.pnl,
-    roi30: equity ? st.pnl / equity : 0,
+    roi30: windowReturn(p.month) ?? (equity ? st.pnl / equity : 0),
     greenDays: st.greenDays,
     worstDay: st.worstDay,
     concentration: st.concentration,
@@ -578,7 +599,7 @@ export async function walletDetail(addr: string, limit = 50): Promise<WalletDeta
     addr,
     equity,
     pnl30: stats.pnl,
-    roi30: equity ? stats.pnl / equity : 0,
+    roi30: windowReturn(p.month) ?? (equity ? stats.pnl / equity : 0),
     greenDays: stats.greenDays,
     worstDay: stats.worstDay,
     curve,

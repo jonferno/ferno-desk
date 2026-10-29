@@ -132,15 +132,24 @@ export function WalletView({ addr }: { addr: string | null }) {
   const [following, setFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [staleAt, setStaleAt] = useState<number | null>(null);
 
   useEffect(() => {
     if (!addr) return;
     let alive = true;
     setError(null);
+    setStaleAt(null);
     void (async () => {
       try {
         const res = await fetch(`/api/wallet/${addr}`);
-        const body = (await res.json()) as { ok: boolean; wallet?: WalletDetail; error?: string; following?: boolean };
+        const body = (await res.json()) as {
+          ok: boolean;
+          wallet?: WalletDetail;
+          error?: string;
+          following?: boolean;
+          stale?: boolean;
+          staleAt?: number;
+        };
         if (!alive) return;
         if (!body.ok || !body.wallet) throw new Error(body.error ?? "wallet unavailable");
         setData(body.wallet);
@@ -148,6 +157,7 @@ export function WalletView({ addr }: { addr: string | null }) {
         setTotal(body.wallet.fillsTotal);
         setPage(0);
         setFollowing(Boolean(body.following));
+        setStaleAt(body.stale && body.staleAt ? body.staleAt : null);
       } catch (err) {
         if (alive) setError((err as Error).message);
       }
@@ -225,6 +235,12 @@ export function WalletView({ addr }: { addr: string | null }) {
       </div>
 
       {error ? <div className="hl-error">{error}</div> : null}
+
+      {staleAt ? (
+        <p className="hl-stale">
+          showing the last good copy from {clock(staleAt)} · Hyperliquid is throttling this address right now
+        </p>
+      ) : null}
 
       {data ? (
         <>
