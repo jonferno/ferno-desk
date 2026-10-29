@@ -133,6 +133,7 @@ export function WalletView({ addr }: { addr: string | null }) {
   const [followBusy, setFollowBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [staleAt, setStaleAt] = useState<number | null>(null);
+  const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     if (!addr) return;
@@ -159,13 +160,19 @@ export function WalletView({ addr }: { addr: string | null }) {
         setFollowing(Boolean(body.following));
         setStaleAt(body.stale && body.staleAt ? body.staleAt : null);
       } catch (err) {
-        if (alive) setError((err as Error).message);
+        if (!alive) return;
+        const msg = (err as Error).message;
+        setError(
+          msg.includes("429")
+            ? "Hyperliquid is throttling this address and there is no saved copy yet. Give it a minute."
+            : msg,
+        );
       }
     })();
     return () => {
       alive = false;
     };
-  }, [addr]);
+  }, [addr, nonce]);
 
   const goPage = async (next: number) => {
     if (!addr || paging) return;
@@ -234,7 +241,14 @@ export function WalletView({ addr }: { addr: string | null }) {
         </button>
       </div>
 
-      {error ? <div className="hl-error">{error}</div> : null}
+      {error ? (
+        <div className="hl-error">
+          {error}
+          <button type="button" className="chip" onClick={() => setNonce((n) => n + 1)}>
+            retry
+          </button>
+        </div>
+      ) : null}
 
       {staleAt ? (
         <p className="hl-stale">
