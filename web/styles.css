@@ -3241,12 +3241,16 @@ kbd {
 .hl-star-btn {
   border: 0;
   background: transparent;
-  padding: 0 6px 0 0;
-  font-size: 12px;
+  padding: 0 0 0 5px;
+  font-size: 11px;
   line-height: 1;
-  color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.16);
   cursor: pointer;
   vertical-align: middle;
+}
+
+.hl-row:hover .hl-star-btn {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .hl-star-btn:hover {

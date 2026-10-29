@@ -237,7 +237,7 @@ export function WalletView({ addr }: { addr: string | null }) {
             }
           }}
         >
-          {following ? "following" : "follow"}
+          {following ? "★ favourite" : "☆ favourite"}
         </button>
       </div>
 

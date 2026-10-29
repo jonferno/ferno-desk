@@ -17,7 +17,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "board", label: "LEADERBOARD" },
   { id: "wallet", label: "WALLET" },
   { id: "chart", label: "CHART" },
-  { id: "following", label: "FOLLOWING" },
+  { id: "following", label: "FAVOURITES" },
 ];
 
 const GMX_TABS: Array<{ id: GmxTab; label: string }> = [

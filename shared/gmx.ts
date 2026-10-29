@@ -52,8 +52,22 @@ export interface GmxTrade {
   pnlUsd: number;
 }
 
-export interface GmxWallet {
+export interface GmxLastTrade {
+  side: "LONG" | "SHORT";
+  market: string;
+  /** PnL of that fill over its own notional, as a fraction. Null when the fill had no size. */
+  pnlPct: number | null;
+  kind: string;
+  at: number;
+}
+
+export interface GmxFollowCard {
   addr: string;
+  row: GmxRow | null;
+  last: GmxLastTrade | null;
+}
+
+export interface GmxWallet {  addr: string;
   positions: GmxPosition[];
   trades: GmxTrade[];
   tradesTotal: number;

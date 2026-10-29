@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
-import type { GmxRow } from "@shared/gmx";
+import type { GmxFollowCard } from "@shared/gmx";
 
 const money = (n: number) => {
   const a = Math.abs(n);
-  const s = a >= 1e6 ? `${(a / 1e6).toFixed(2)}m` : a >= 1e3 ? `${(a / 1e3).toFixed(1)}k` : a.toFixed(0);
+  const s = a >= 1e9 ? `${(a / 1e9).toFixed(1)}b` : a >= 1e6 ? `${(a / 1e6).toFixed(1)}m` : a >= 1e3 ? `${(a / 1e3).toFixed(0)}k` : a.toFixed(0);
   return `${n < 0 ? "-" : ""}$${s}`;
 };
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 const short = (a: string) => `${a.slice(0, 6)}.${a.slice(-4)}`;
-
-export interface GmxFollowCard {
-  addr: string;
-  row: GmxRow | null;
-}
+const ago = (ms: number) => {
+  const m = Math.max(0, Math.round((Date.now() - ms) / 60_000));
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  return h < 48 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
+};
+const when = (ms: number) =>
+  new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 export function GmxFollowingView({
   onPick,
@@ -31,7 +34,7 @@ export function GmxFollowingView({
         const res = await fetch("/api/gmx/following");
         const body = (await res.json()) as { ok: boolean; wallets?: GmxFollowCard[]; error?: string };
         if (!alive) return;
-        if (!body.ok) throw new Error(body.error ?? "following unavailable");
+        if (!body.ok) throw new Error(body.error ?? "favourites unavailable");
         setCards(body.wallets ?? []);
       } catch (err) {
         if (alive) setError((err as Error).message);
@@ -45,7 +48,7 @@ export function GmxFollowingView({
   return (
     <section className="hl-panel">
       <div className="hl-panel__head">
-        <h2 className="lab">GMX FAVOURITES</h2>
+        <h2 className="lab">FAVOURITES</h2>
         <span className="hl-grow" />
         <span className="hl-lab">{cards ? `${cards.length} wallets` : "loading"}</span>
       </div>
@@ -59,6 +62,7 @@ export function GmxFollowingView({
       <div className="hl-cards">
         {(cards ?? []).map((w) => {
           const r = w.row;
+          const l = w.last;
           return (
             <article key={w.addr} className="hl-card" onClick={() => onPick(w.addr)} title="open this wallet">
               <header className="hl-card__head">
@@ -111,7 +115,26 @@ export function GmxFollowingView({
               )}
 
               <footer className="hl-card__foot">
-                <span className="hl-note">30d · arbitrum</span>
+                {l ? (
+                  <span
+                    className="hl-last"
+                    title={`${l.kind} ${l.side} ${l.market} · ${when(l.at)}${
+                      l.pnlPct != null ? ` · ${(l.pnlPct * 100).toFixed(1)}% on the fill` : ""
+                    }`}
+                  >
+                    {l.side} {l.market}
+                    {l.pnlPct != null ? (
+                      <b className={l.pnlPct >= 0 ? "is-up" : "is-down"}>
+                        {" "}
+                        {l.pnlPct >= 0 ? "+" : ""}
+                        {(l.pnlPct * 100).toFixed(1)}%
+                      </b>
+                    ) : null}{" "}
+                    <span className="hl-note">· {ago(l.at)}</span>
+                  </span>
+                ) : (
+                  <span className="hl-note">no fills in the last 48h</span>
+                )}
               </footer>
             </article>
           );

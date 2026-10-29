@@ -1,4 +1,4 @@
-import type { GmxBoard, GmxPosition, GmxRow, GmxTrade, GmxWallet } from "@shared/gmx";
+import type { GmxBoard, GmxLastTrade, GmxPosition, GmxRow, GmxTrade, GmxWallet } from "@shared/gmx";
 import { boardRows, dailyStats, marketMap, positions, trades, usd, netPnl, type PeriodRow } from "./client";
 
 /**
@@ -73,6 +73,42 @@ const ORDER_KIND: Record<number, string> = {
   7: "liquidation",
 };
 
+function marketLabel(map: Map<string, { symbol: string }>, marketAddress?: string, indexName?: string): string {
+  if (indexName) return indexName;
+  const hit = marketAddress ? map.get(marketAddress.toLowerCase()) : undefined;
+  return hit?.symbol ?? marketAddress ?? "-";
+}
+
+const lastCache = new Map<string, { at: number; last: GmxLastTrade | null }>();
+
+/** The newest executed fill in the last 48h, for the favourites cards. */
+export async function gmxLastTrade(addr: string): Promise<GmxLastTrade | null> {
+  const key = addr.toLowerCase();
+  const hit = lastCache.get(key);
+  if (hit && Date.now() - hit.at < 2 * 60_000) return hit.last;
+
+  let last: GmxLastTrade | null = null;
+  try {
+    const [rows, map] = await Promise.all([trades(addr, 48), markets()]);
+    const t = rows[0];
+    if (t) {
+      const size = usd(t.sizeDeltaUsd);
+      const pnl = usd(t.pnlUsd);
+      last = {
+        side: t.isLong ? "LONG" : "SHORT",
+        market: marketLabel(map, t.marketAddress),
+        pnlPct: size > 0 ? pnl / size : null,
+        kind: ORDER_KIND[t.orderType ?? -1] ?? "trade",
+        at: (t.timestamp ?? 0) * 1000,
+      };
+    }
+  } catch {
+    last = hit?.last ?? null;
+  }
+  lastCache.set(key, { at: Date.now(), last });
+  return last;
+}
+
 export async function gmxWallet(addr: string): Promise<GmxWallet> {
   const [pos, rawTrades, map, board] = await Promise.all([
     positions(addr),
@@ -93,11 +129,7 @@ export async function gmxWallet(addr: string): Promise<GmxWallet> {
     return { t: d.dayTimestamp * 1000, v: running };
   });
 
-  const label = (marketAddress?: string, indexName?: string) => {
-    if (indexName) return indexName;
-    const hit = marketAddress ? map.get(marketAddress.toLowerCase()) : undefined;
-    return hit?.symbol ?? marketAddress ?? "-";
-  };
+  const label = (marketAddress?: string, indexName?: string) => marketLabel(map, marketAddress, indexName);
 
   const rows: GmxPosition[] = pos
     .map((p) => ({

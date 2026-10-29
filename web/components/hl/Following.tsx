@@ -121,13 +121,13 @@ export function Following({ onPick }: { onPick: (addr: string) => void }) {
 
       <section className="hl-panel hl-nearpanel">
         <div className="hl-panel__head">
-          <h2 className="lab">FOLLOWING</h2>
+          <h2 className="lab">FAVOURITES</h2>
           <span className="hl-grow" />
           <span className="hl-lab">{view?.polledAt ? `checked ${when(view.polledAt)}` : "waiting for first check"}</span>
         </div>
 
         {wallets.length === 0 ? (
-          <p className="hl-empty">open a wallet from the leaderboard and press follow. alerts go to the webhook above.</p>
+          <p className="hl-empty">open a wallet from the leaderboard and star it. alerts go to the webhook above.</p>
         ) : (
           <div className="hl-cards">
             {wallets.map((w) => {

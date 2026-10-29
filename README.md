@@ -29,9 +29,9 @@ arm with a button and finish with two clicks; MACD 12/26/9 plus a zero-lag band 
 pane. Star any token to keep it: stars show at the top of the picker and as chips above the chart, so
 the handful of coins you actually trade are one click away.
 
-**Following.** Star any wallet. Its card carries the same numbers as the leaderboard plus its newest
-fill and how that position is doing right now. Optional Discord webhook: one alert per token per 15
-minutes, so a burst of fills does not spam the channel.
+**Favourites.** Star any wallet, on both venues. Its card carries the same numbers as the leaderboard
+plus its newest fill and how that position is doing right now. Optional Discord webhook on the
+Hyperliquid side: one alert per token per 15 minutes, so a burst of fills does not spam the channel.
 
 **GMX venue.** A switch in the header swaps the whole desk to GMX v2 on Arbitrum. The board is built
 from the venue's own `periodAccountStats` rows, so PnL and ROI match app.gmx.io: PnL is realised PnL,
