@@ -1,5 +1,5 @@
 {
-  "name": "hyperliquid-desk",
+  "name": "ferno-desk",
   "version": "0.1.0",
   "description": "Self-hosted, read-only Hyperliquid research desk: wallet screener, 48h position replay, charts and Discord fill alerts.",
   "license": "MIT",
