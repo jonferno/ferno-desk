@@ -2639,6 +2639,38 @@ kbd {
   margin-left: 8px;
 }
 
+.venue-switch {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  margin-left: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.venue-btn {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  font-family: "Press Start 2P", monospace;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  padding: 6px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.venue-btn:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.venue-btn.is-on {
+  background: linear-gradient(180deg, #ffb347, #ef6a12);
+  color: #1a1004;
+}
+
 .hl-status {
   margin-left: auto;
   display: flex;

@@ -1,10 +1,10 @@
-# HL DESK: a self-hosted Hyperliquid research desk
+# HL DESK: a self-hosted perp research desk
 
-Read-only research over Hyperliquid perps. It screens trader wallets, replays the last 48 hours of
-their fills to work out what they actually built, charts price with a MACD pane, and can post fill
-alerts to a Discord webhook. No wallet, no keys, no orders. Nothing here trades.
+Read-only research over Hyperliquid and GMX v2 perps. It screens trader wallets, replays the last 48
+hours of their fills to work out what they actually built, charts price with a MACD pane, and can post
+fill alerts to a Discord webhook. No wallet, no keys, no orders. Nothing here trades.
 
-The public demo at <https://ferno.fun/hl/> is a frozen snapshot of the same UI.
+The public demo at <https://ferno.fun/hl/> is a frozen snapshot of the same UI, Hyperliquid only.
 
 ![Wallet view: equity timeline with range chips, positions rebuilt from the last 48h of fills, paged trade list](docs/screenshot-wallet.jpg)
 
@@ -32,6 +32,15 @@ the handful of coins you actually trade are one click away.
 **Following.** Star any wallet. Its card carries the same numbers as the leaderboard plus its newest
 fill and how that position is doing right now. Optional Discord webhook: one alert per token per 15
 minutes, so a burst of fills does not spam the channel.
+
+**GMX venue.** A switch in the header swaps the whole desk to GMX v2 on Arbitrum. The board is built
+from the venue's own `periodAccountStats` rows, so PnL and ROI match app.gmx.io: PnL is realised PnL,
+and ROI is net realised PnL after fees, price impact and positive funding, over the capital used in
+the window. Rows carry volume, average size, average leverage, win/loss and trade count. The wallet
+page reads live positions from the GMX API (entry, mark, liquidation, leverage, PnL percent) and the
+last 48 hours of executed trades from `/trades/search`. Windows are 7d and 30d, day aligned because
+GMX's resolver only accepts UTC midnight. GMX has no equity curve, so there is no equity timeline; the
+chart and following tabs are Hyperliquid-only for now.
 
 **Passcode gate.** Set `SITE_PASSCODE` and every page and `/api/*` route needs it, with an HttpOnly
 HMAC cookie and a 10-attempt / 10-minute lockout. Leave it empty to run open on your own box.
@@ -77,6 +86,15 @@ Public Hyperliquid endpoints only, no account or API key:
 The engine refreshes the board every 10 minutes and caches wallet, chart and stats responses, so a
 page view rarely hits the API twice. Hyperliquid returns 429 under load; the caches absorb it and a
 failed lookup falls back to the last good copy.
+
+GMX uses its public API plus the Subsquid index, no key either:
+
+- `https://arbitrum.gmxapi.io/v1` (peer `.ai`) for `/markets/info`, `/positions`, `/trades/search`
+  and `/prices/ohlcv`. Trade routes intermittently answer 500 after ten seconds, so every call is
+  retried across both hosts.
+- `https://gmx.squids.live/gmx-synthetics-arbitrum:prod/api/graphql` for the board's
+  `periodAccountStats`. The indexer rejects non-browser user agents, so the client sends a browser
+  one; money is 30-decimal fixed point on both sources.
 
 Two data rules worth knowing:
 

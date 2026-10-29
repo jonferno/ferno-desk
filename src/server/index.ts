@@ -7,6 +7,8 @@ import { candles, chartPayload, markets, screenLeaderboard, walletDetail, wallet
 import { Following } from "../hl/follow";
 import { Favorites } from "../hl/favorites";
 import { registerAuth } from "./auth";
+import { gmxBoard, gmxWallet } from "../gmx/desk";
+import type { GmxWallet } from "@shared/gmx";
 
 /**
  * Read-only Hyperliquid desk, plus a following list that can post trade alerts
@@ -20,6 +22,8 @@ let cache: DeskSnapshot | null = null;
 let building: Promise<void> | null = null;
 const wallets = new Map<string, { at: number; data: WalletDetail }>();
 const inflightWallets = new Map<string, Promise<WalletDetail>>();
+const gmxWallets = new Map<string, { at: number; data: GmxWallet }>();
+const GMX_WALLET_TTL_MS = 60_000;
 const chartCache = new Map<string, { at: number; payload: unknown }>();
 const statsCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof walletStats>> | null }>();
 const STATS_TTL_MS = 5 * 60_000;
@@ -190,6 +194,33 @@ export function createServer(deps: { following: Following; favorites: Favorites 
     ok: true,
     coins: favorites.remove(String(req.params.coin)),
   }));
+
+  app.get<{ Querystring: { window?: string } }>("/api/gmx/board", async (req, reply) => {
+    const window = req.query.window === "7d" ? "7d" : "30d";
+    try {
+      return { ok: true, board: await gmxBoard(window) };
+    } catch (err) {
+      return reply.code(502).send({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  app.get<{ Params: { addr: string } }>("/api/gmx/wallet/:addr", async (req, reply) => {
+    const addr = String(req.params.addr ?? "");
+    if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) return reply.code(400).send({ ok: false, error: "bad address" });
+    const key = addr.toLowerCase();
+    const hit = gmxWallets.get(key);
+    if (hit && Date.now() - hit.at < GMX_WALLET_TTL_MS) return { ok: true, wallet: hit.data };
+    try {
+      const data = await gmxWallet(addr);
+      gmxWallets.set(key, { at: Date.now(), data });
+      return { ok: true, wallet: data };
+    } catch (err) {
+      // Same rule as the Hyperliquid side: a flaky upstream serves the last
+      // good copy instead of an empty page.
+      if (hit) return { ok: true, wallet: hit.data, stale: true };
+      return reply.code(502).send({ ok: false, error: (err as Error).message });
+    }
+  });
 
   const dist = resolve(import.meta.dirname, "../../dist");
   if (existsSync(dist)) {
