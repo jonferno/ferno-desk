@@ -134,7 +134,9 @@ export default function App() {
   }, []);
 
   const updated = desk?.at ? Math.max(0, Math.round((Date.now() - desk.at) / 60_000)) : null;
-  const isGmx = venue === "gmx";
+  // The snapshot carries Hyperliquid data only, so a stored "gmx" choice must
+  // not strand a public visitor on a venue with no engine behind it.
+  const isGmx = venue === "gmx" && !isStatic;
   const tabs = isGmx ? GMX_TABS : TABS;
   const activeTab = isGmx ? gmxTab : tab;
   const activeError = isGmx ? gmxError : error;
