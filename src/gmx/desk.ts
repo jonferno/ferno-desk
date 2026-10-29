@@ -1,5 +1,6 @@
 import type { GmxBoard, GmxLastTrade, GmxPosition, GmxRow, GmxTrade, GmxWallet } from "@shared/gmx";
-import { boardRows, dailyStats, marketMap, positions, trades, usd, netPnl, type PeriodRow } from "./client";
+import { boardRows, dailyStats, marketMap, marketSymbols, ohlcv, positions, trades, usd, netPnl, type PeriodRow } from "./client";
+import { computeSeries } from "../indicators";
 
 /**
  * GMX screen and wallet detail.
@@ -200,3 +201,54 @@ export async function gmxWallet(addr: string): Promise<GmxWallet> {
     collateral,
   };
 }
+
+const TIMEFRAMES: Record<string, string> = { "5m": "5m", "15m": "15m", "1h": "1h", "4h": "4h", "1d": "1d" };
+
+/** Candles plus the same zero-lag band and MACD the Hyperliquid chart uses. */
+export async function gmxChart(symbol: string, interval: string, bars = 400) {
+  const timeframe = TIMEFRAMES[interval] ?? "1h";
+  const rows = await ohlcv(symbol.toUpperCase(), timeframe, bars);
+  const candles = rows
+    .map((r) => ({
+      time: Math.floor(r.timestamp / 1000),
+      open: Number(r.open),
+      high: Number(r.high),
+      low: Number(r.low),
+      close: Number(r.close),
+    }))
+    .filter((c) => Number.isFinite(c.close) && c.time > 0)
+    .sort((a, b) => a.time - b.time);
+
+  const base = { symbol: symbol.toUpperCase(), interval: timeframe, candles };
+  const input = candles.map((c) => ({ ts: c.time * 1000, open: c.open, high: c.high, low: c.low, close: c.close, volume: 0 }));
+  if (input.length < 80) return { ...base, band: null, basis: [], macd: null, markers: null };
+
+  const series = computeSeries(input);
+  const at = (i: number) => candles[i]!.time;
+  const line = (arr: number[], from: number) =>
+    arr
+      .map((v, i) => (i >= from && Number.isFinite(v) ? { time: at(i), value: v } : null))
+      .filter((x): x is { time: number; value: number } => x !== null);
+
+  return {
+    ...base,
+    band: {
+      upper: line(series.zerolag.bandUpper, 70),
+      lower: line(series.zerolag.bandLower, 70),
+    },
+    basis: line(series.zerolag.basis, 70),
+    macd: {
+      line: line(series.macd.macd, 35),
+      signal: line(series.macd.signal, 35),
+      hist: line(series.macd.hist, 35),
+    },
+    markers: {
+      long: input.map((c, i) => (series.zerolag.entryLong[i] ? Math.floor(c.ts / 1000) : 0)).filter(Boolean),
+      short: input.map((c, i) => (series.zerolag.entryShort[i] ? Math.floor(c.ts / 1000) : 0)).filter(Boolean),
+    },
+    trend: series.zerolag.trend[series.zerolag.trend.length - 1] ?? 0,
+    macdTrend: series.macd.trend[series.macd.trend.length - 1] ?? 0,
+  };
+}
+
+export { marketSymbols };

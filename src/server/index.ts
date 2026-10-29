@@ -7,7 +7,7 @@ import { candles, chartPayload, markets, screenLeaderboard, walletDetail, wallet
 import { Following } from "../hl/follow";
 import { Favorites } from "../hl/favorites";
 import { registerAuth } from "./auth";
-import { gmxBoard, gmxLastTrade, gmxWallet } from "../gmx/desk";
+import { gmxBoard, gmxChart, gmxLastTrade, gmxWallet, marketSymbols } from "../gmx/desk";
 import { GmxFollowing } from "../gmx/follow";
 import type { GmxWallet } from "@shared/gmx";
 
@@ -196,8 +196,29 @@ export function createServer(deps: { following: Following; favorites: Favorites;
     coins: favorites.remove(String(req.params.coin)),
   }));
 
-  app.get<{ Querystring: { window?: string } }>("/api/gmx/board", async (req, reply) => {
-    const window = req.query.window === "7d" ? "7d" : "30d";
+  app.get("/api/gmx/markets", async (_req, reply) => {
+    try {
+      return { ok: true, symbols: await marketSymbols() };
+    } catch (err) {
+      return reply.code(502).send({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  app.get<{ Querystring: { symbol?: string; interval?: string; bars?: string } }>(
+    "/api/gmx/chart",
+    async (req, reply) => {
+      const symbol = String(req.query.symbol ?? "BTC").toUpperCase();
+      const interval = String(req.query.interval ?? "1h");
+      const bars = Math.min(1_000, Math.max(80, Number(req.query.bars ?? 400) || 400));
+      try {
+        return { ok: true, ...(await gmxChart(symbol, interval, bars)) };
+      } catch (err) {
+        return reply.code(502).send({ ok: false, error: (err as Error).message });
+      }
+    },
+  );
+
+  app.get<{ Querystring: { window?: string } }>("/api/gmx/board", async (req, reply) => {    const window = req.query.window === "7d" ? "7d" : "30d";
     try {
       return { ok: true, board: await gmxBoard(window) };
     } catch (err) {

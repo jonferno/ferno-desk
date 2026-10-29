@@ -263,7 +263,6 @@ export interface DailyStat {
   dayTimestamp: number;
   realizedPnl: string;
 }
-
 const DAILY_QUERY = `
 query Daily($a: String!, $from: Int!) {
   accountStats(where: { account_eq: $a, period_eq: "1d", dayTimestamp_gte: $from }, orderBy: dayTimestamp_ASC, limit: 40) {
@@ -281,6 +280,40 @@ export async function dailyStats(addr: string, fromTs: number): Promise<DailySta
   } catch {
     return [];
   }
+}
+
+export interface OhlcvRow {
+  timestamp: number;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+}
+
+const ohlcvCache = new Map<string, { at: number; rows: OhlcvRow[] }>();
+
+/** Candles for one market, cached for 30 seconds. */
+export async function ohlcv(symbol: string, timeframe: string, limit = 400): Promise<OhlcvRow[]> {
+  const key = `${symbol}:${timeframe}:${limit}`;
+  const hit = ohlcvCache.get(key);
+  if (hit && Date.now() - hit.at < 30_000) return hit.rows;
+  const rows = await api<OhlcvRow[]>(
+    `/prices/ohlcv?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&limit=${limit}`,
+  );
+  const out = Array.isArray(rows) ? rows : [];
+  ohlcvCache.set(key, { at: Date.now(), rows: out });
+  return out;
+}
+
+/** Perp symbols for the chart picker, alphabetical. */
+export async function marketSymbols(): Promise<string[]> {
+  const map = await marketMap();
+  const out = new Set<string>();
+  for (const m of map.values()) {
+    if (!/^[A-Z0-9]+\/USD\b/.test(m.name)) continue;
+    if (m.symbol) out.add(m.symbol);
+  }
+  return [...out].sort((a, b) => a.localeCompare(b));
 }
 
 export { usd };

@@ -41,8 +41,10 @@ the window. Rows carry win/loss with a hit rate, average leverage, 48h fills and
 every column sorts, and the same star as the Hyperliquid side saves a wallet to a GMX favourites tab. The wallet
 page reads live positions from the GMX API (entry, mark, liquidation, leverage, collateral and PnL)
 and the last 48 hours of executed trades from `/trades/search`. Because GMX publishes no account value
-history, the chart is cumulative realised PnL over 30 days from the day-level `accountStats` rows, not
-an equity curve. Windows are 7d and 30d, day aligned because GMX's resolver only accepts UTC midnight.
+history, the wallet chart is cumulative realised PnL over 30 days from the day-level `accountStats` rows,
+not an equity curve. Windows are 7d and 30d, day aligned because GMX's resolver only accepts UTC
+midnight. The chart tab reads `/prices/ohlcv` and runs the same zero-lag band and MACD as the
+Hyperliquid side, with the same measure tool.
 
 **Passcode gate.** Set `SITE_PASSCODE` and every page and `/api/*` route needs it, with an HttpOnly
 HMAC cookie and a 10-attempt / 10-minute lockout. Leave it empty to run open on your own box.

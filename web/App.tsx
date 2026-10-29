@@ -8,9 +8,10 @@ import { Following } from "./components/hl/Following";
 import { GmxBoardTable } from "./components/gmx/Board";
 import { GmxWalletView } from "./components/gmx/Wallet";
 import { GmxFollowingView } from "./components/gmx/Following";
+import { GmxChart } from "./components/gmx/Chart";
 
 type Tab = "board" | "wallet" | "chart" | "following";
-type GmxTab = "board" | "wallet" | "following";
+type GmxTab = "board" | "wallet" | "chart" | "following";
 type Venue = "hl" | "gmx";
 
 const TABS: Array<{ id: Tab; label: string }> = [
@@ -23,6 +24,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
 const GMX_TABS: Array<{ id: GmxTab; label: string }> = [
   { id: "board", label: "LEADERBOARD" },
   { id: "wallet", label: "WALLET" },
+  { id: "chart", label: "CHART" },
   { id: "following", label: "FAVOURITES" },
 ];
 
@@ -255,7 +257,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className={`hl-main ${!isGmx && tab === "chart" ? "hl-main--fixed" : ""}`}>
+      <main className={`hl-main ${(isGmx ? gmxTab === "chart" : tab === "chart") ? "hl-main--fixed" : ""}`}>
         {activeError ? <div className="hl-error">{activeError}</div> : null}
 
         {isGmx ? (
@@ -279,6 +281,8 @@ export default function App() {
                 if (pickedGmx) void toggleGmxFollow(pickedGmx);
               }}
             />
+          ) : gmxTab === "chart" ? (
+            <GmxChart />
           ) : (
             <GmxFollowingView
               onPick={(addr) => {
