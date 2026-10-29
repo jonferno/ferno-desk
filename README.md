@@ -14,7 +14,8 @@ The public demo at <https://ferno.fun/hl/> is a frozen snapshot of the same UI, 
 tests over the last 30 days: active in the last 48h, green days at 48% or more, no single day worth
 more than 70% of profit, and a worst day better than -30% of equity. Wallets that pass are listed as
 consistent; wallets that fail exactly one test are listed as near misses with the test they failed,
-so the board still shows the interesting ones. Equity floor is $10k.
+so the board still shows the interesting ones. Equity floor is $10k, and the 30-day P&L and ROI on the
+board are the live figures, the same ones the favourites card shows.
 
 **Wallet page.** Equity timeline with 24h/7d/30d/all ranges, the explorer link, the position table and
 the 48h trade list. The curve merges every portfolio window Hyperliquid returns (day, week, month,
@@ -36,8 +37,8 @@ Hyperliquid side: one alert per token per 15 minutes, so a burst of fills does n
 **GMX venue.** A switch in the header swaps the whole desk to GMX v2 on Arbitrum. The board is built
 from the venue's own `periodAccountStats` rows, so PnL and ROI match app.gmx.io: PnL is realised PnL,
 and ROI is net realised PnL after fees, price impact and positive funding, over the capital used in
-the window. Rows carry volume, average size, average leverage, win/loss and trade count, every column
-sorts, and the same star as the Hyperliquid side saves a wallet to a GMX favourites tab. The wallet
+the window. Rows carry win/loss with a hit rate, average leverage, 48h fills and the window's trade count,
+every column sorts, and the same star as the Hyperliquid side saves a wallet to a GMX favourites tab. The wallet
 page reads live positions from the GMX API (entry, mark, liquidation, leverage, collateral and PnL)
 and the last 48 hours of executed trades from `/trades/search`. Because GMX publishes no account value
 history, the chart is cumulative realised PnL over 30 days from the day-level `accountStats` rows, not

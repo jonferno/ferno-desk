@@ -71,18 +71,27 @@ function windowReturn(win?: { accountValueHistory?: [number, string][]; pnlHisto
 interface Fills24 {
   trades: number;
   coins: number;
+  wins: number;
+  losses: number;
 }
 
 async function fillsSince(addr: string, hours: number): Promise<Fills24> {
   const now = Date.now();
-  const fills = await info<Array<{ coin: string }>>({
+  const fills = await info<Array<{ coin: string; closedPnl?: string }>>({
     type: "userFillsByTime",
     user: addr,
     startTime: now - hours * 3_600_000,
     endTime: now,
     aggregateByTime: false,
   });
-  return { trades: fills.length, coins: new Set(fills.map((f) => f.coin)).size };
+  let wins = 0;
+  let losses = 0;
+  for (const f of fills) {
+    const pnl = Number(f.closedPnl ?? 0);
+    if (pnl > 0) wins++;
+    else if (pnl < 0) losses++;
+  }
+  return { trades: fills.length, coins: new Set(fills.map((f) => f.coin)).size, wins, losses };
 }
 
 /**
@@ -128,10 +137,15 @@ interface CacheEntry extends Stats {
   fillsAt?: number;
   trades?: number;
   coins?: number;
+  wins48?: number;
+  losses48?: number;
+  /** Live window PnL and return, so the board and the favourites card agree. */
+  pnl?: number;
+  roi?: number;
   fails?: string;
 }
 
-const STATS_TTL_MS = 6 * 3_600_000;
+const STATS_TTL_MS = 2 * 3_600_000;
 const STATS_STALE_MS = 24 * 3_600_000;
 const STATS_PATH = resolvePath(process.env.DATA_DIR ?? "./data", "stats.json");
 
@@ -197,10 +211,24 @@ export async function screenLeaderboard(limit = 25, nearLimit = 14): Promise<Scr
   await pool(stale, 4, async (r) => {
     try {
       const p = await portfolio(r.addr);
-      const series = (p.month?.pnlHistory ?? p.allTime?.pnlHistory ?? []).map(([, v]) => Number(v)).filter(Number.isFinite);
+      const month = p.month ?? p.allTime;
+      const series = (month?.pnlHistory ?? []).map(([, v]) => Number(v)).filter(Number.isFinite);
       if (series.length < 10) return;
       const st = dailyStats(series);
-      cache.set(r.addr, { at: now, greenDays: st.greenDays, worstDay: st.worstDay, concentration: st.concentration });
+      const equity = month?.accountValueHistory?.length
+        ? Number(month.accountValueHistory[month.accountValueHistory.length - 1]![1])
+        : 0;
+      // The venue's own published numbers can lag by hours; the same live
+      // figures the favourites card uses keep the two surfaces consistent.
+      const roi = windowReturn(month) ?? (equity ? st.pnl / equity : 0);
+      cache.set(r.addr, {
+        at: now,
+        greenDays: st.greenDays,
+        worstDay: st.worstDay,
+        concentration: st.concentration,
+        pnl: st.pnl,
+        roi,
+      });
     } catch {
       /* keep the old entry, if any */
     }
@@ -242,6 +270,8 @@ export async function screenLeaderboard(limit = 25, nearLimit = 14): Promise<Scr
       hit.fillsAt = now;
       hit.trades = trades;
       hit.coins = coins;
+      hit.wins48 = f.wins;
+      hit.losses48 = f.losses;
       hit.fails = fails.join(", ");
     } else if (hit.fillsAt && now - hit.fillsAt < 2 * 3_600_000) {
       // reuse the last known classification rather than dropping the wallet
@@ -255,12 +285,16 @@ export async function screenLeaderboard(limit = 25, nearLimit = 14): Promise<Scr
 
     const row: LeaderRow = {
       ...r,
+      pnl30: hit.pnl ?? r.pnl30,
+      roi30: hit.roi ?? r.roi30,
       greenDays: hit.greenDays,
       worstDay: hit.worstDay,
       concentration: hit.concentration,
       followable: null,
       trades24h: trades,
       coins24h: coins,
+      wins48: hit.wins48 ?? null,
+      losses48: hit.losses48 ?? null,
       verdict: fails.length ? "lucky" : "consistent",
       reason: fails.join(", "),
     };

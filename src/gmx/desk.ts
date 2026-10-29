@@ -32,8 +32,23 @@ function toRow(r: PeriodRow): GmxRow {
     wins: Number(r.wins ?? 0),
     losses: Number(r.losses ?? 0),
     trades: closed,
+    trades48: null,
     capital,
   };
+}
+
+async function mapPool<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]!);
+    }
+  });
+  await Promise.all(workers);
+  return out;
 }
 
 export async function gmxBoard(window: "7d" | "30d" = "30d"): Promise<GmxBoard> {
@@ -50,7 +65,16 @@ export async function gmxBoard(window: "7d" | "30d" = "30d"): Promise<GmxBoard> 
     .sort((a, b) => b.pnl - a.pnl)
     .slice(0, 60);
 
-  const data: GmxBoard = { at: Date.now(), window, from, to, rows };
+  // Fill counts for the last 48h come from the trade API, one call per row.
+  // Without them the board would have no short window at all.
+  const withFills = await mapPool(rows, 6, async (r) => ({
+    ...r,
+    trades48: await trades(r.addr, 48)
+      .then((list) => list.length)
+      .catch(() => null),
+  }));
+
+  const data: GmxBoard = { at: Date.now(), window, from, to, rows: withFills };
   boardCache.set(window, { at: data.at, data });
   return data;
 }

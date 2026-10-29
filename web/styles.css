@@ -3261,6 +3261,12 @@ kbd {
   color: #ffb347;
 }
 
+.hl-winrate {
+  font-style: normal;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.38);
+}
+
 .hl-stale {
   margin: 0 0 10px;
   padding: 5px 8px;

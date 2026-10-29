@@ -8,12 +8,12 @@ const money = (n: number) => {
 };
 const pct = (n: number, d = 1) => `${(n * 100).toFixed(d)}%`;
 
-type Col = keyof Pick<LeaderRow, "equity" | "pnl30" | "roi30" | "greenDays" | "worstDay" | "concentration" | "trades24h">;
+type Col = keyof Pick<LeaderRow, "pnl30" | "roi30" | "wins48" | "greenDays" | "worstDay" | "concentration" | "trades24h">;
 
 const COLS: Array<{ key: Col; label: string; hint: string }> = [
-  { key: "equity", label: "EQUITY", hint: "account value" },
   { key: "pnl30", label: "30D P&L", hint: "headline profit, not a quality signal" },
-  { key: "roi30", label: "ROI", hint: "30 day return on equity" },
+  { key: "roi30", label: "ROI", hint: "30 day return on capital, transfers neutral" },
+  { key: "wins48", label: "WIN/LOSS", hint: "closing fills in the last 48h that ended in profit" },
   { key: "greenDays", label: "GREEN", hint: "share of profitable days over full history" },
   { key: "worstDay", label: "WORST", hint: "worst single day" },
   { key: "concentration", label: "BEST/TOT", hint: "share of profit from the single best day" },
@@ -76,9 +76,23 @@ function Table({
                 ) : null}
               </td>
               <td className="hl-addr num">{r.addr.slice(0, 6)}…{r.addr.slice(-4)}</td>
-              <td className="num">{money(r.equity)}</td>
               <td className={`num ${r.pnl30 >= 0 ? "is-up" : "is-down"}`}>{money(r.pnl30)}</td>
               <td className={`num ${r.roi30 >= 0 ? "is-up" : "is-down"}`}>{pct(r.roi30)}</td>
+              <td className="num">
+                {r.wins48 != null ? (
+                  <>
+                    {r.wins48}/{r.losses48 ?? 0}
+                    {r.wins48 + (r.losses48 ?? 0) > 0 ? (
+                      <i className="hl-winrate">
+                        {" "}
+                        {((r.wins48 / (r.wins48 + (r.losses48 ?? 0))) * 100).toFixed(0)}%
+                      </i>
+                    ) : null}
+                  </>
+                ) : (
+                  "·"
+                )}
+              </td>
               <td className="num">{r.greenDays.toFixed(0)}%</td>
               <td className="num is-down">{money(r.worstDay)}</td>
               <td className={`num ${r.concentration >= 0.55 ? "is-down" : ""}`}>{pct(r.concentration, 0)}</td>

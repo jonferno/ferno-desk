@@ -164,6 +164,10 @@ export interface RawTrade {
 
 /** The last `hours` of executed trades for one account, newest first. */
 export async function trades(addr: string, hours = 48): Promise<RawTrade[]> {
+  const key = `${addr.toLowerCase()}:${hours}`;
+  const hit = tradeCache.get(key);
+  if (hit && Date.now() - hit.at < 2 * 60_000) return hit.rows;
+
   const now = Math.floor(Date.now() / 1000);
   const since = now - hours * 3600;
   const out: RawTrade[] = [];
@@ -179,8 +183,14 @@ export async function trades(addr: string, hours = 48): Promise<RawTrade[]> {
     if (!body.hasMore || !body.nextCursor) break;
     cursor = body.nextCursor;
   }
-  return out.filter((t) => t.eventName === "OrderExecuted").sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+  const rows = out
+    .filter((t) => t.eventName === "OrderExecuted")
+    .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+  tradeCache.set(key, { at: Date.now(), rows });
+  return rows;
 }
+
+const tradeCache = new Map<string, { at: number; rows: RawTrade[] }>();
 
 export interface PeriodRow {  id: string;
   realizedPnl?: string;

@@ -11,6 +11,9 @@ export interface LeaderRow {
   followable: number | null;
   trades24h: number | null;
   coins24h: number | null;
+  /** Closing fills in the last 48h that ended in profit, and those that did not. */
+  wins48?: number | null;
+  losses48?: number | null;
   verdict: "consistent" | "lucky" | "thin";
   /** Which test the wallet failed, when it is a near miss. */
   reason?: string;

@@ -14,6 +14,8 @@ export interface GmxRow {
   wins: number;
   losses: number;
   trades: number;
+  /** Executed fills in the last 48 hours, null until that count is fetched. */
+  trades48: number | null;
   /** Capital the return is measured against. */
   capital: number;
 }
