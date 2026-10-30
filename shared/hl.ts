@@ -8,6 +8,12 @@ export interface LeaderRow {
   greenDays: number;
   worstDay: number;
   concentration: number;
+  /** Same figures over the last 7 days, for the window switch. Null while unknown. */
+  pnl7?: number | null;
+  roi7?: number | null;
+  green7?: number | null;
+  worst7?: number | null;
+  conc7?: number | null;
   followable: number | null;
   trades24h: number | null;
   coins24h: number | null;

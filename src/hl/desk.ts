@@ -91,20 +91,32 @@ async function fillCounts(addr: string): Promise<{ d7: number; d30: number; capp
 
 async function fillsSince(addr: string, hours: number): Promise<Fills24> {
   const now = Date.now();
-  const fills = await info<Array<{ coin: string; closedPnl?: string }>>({
+  const fills = await info<Array<{ coin: string; dir: string; sz: string; closedPnl?: string; time: number; oid?: number }>>({
     type: "userFillsByTime",
     user: addr,
     startTime: now - hours * 3_600_000,
     endTime: now,
     aggregateByTime: false,
   });
-  let wins = 0;
-  let losses = 0;
+
+  // Count closing orders, not fills. One market maker position can close in
+  // ninety orders of three fills each, which read as 270 wins and no losses.
+  // Grouping by order id keeps partial closes, and the 2000-fill cap cannot
+  // hide an order whose fills are all present.
+  const byOrder = new Map<number, number>();
   for (const f of fills) {
     const pnl = Number(f.closedPnl ?? 0);
-    if (pnl > 0) wins++;
-    else if (pnl < 0) losses++;
+    if (!pnl) continue;
+    const id = Number(f.oid ?? 0) || f.time;
+    byOrder.set(id, (byOrder.get(id) ?? 0) + pnl);
   }
+  let wins = 0;
+  let losses = 0;
+  for (const total of byOrder.values()) {
+    if (total > 0) wins++;
+    else if (total < 0) losses++;
+  }
+
   return { trades: fills.length, coins: new Set(fills.map((f) => f.coin)).size, wins, losses };
 }
 
@@ -145,6 +157,14 @@ interface Stats {
   concentration: number;
 }
 
+interface WindowStats {
+  pnl: number;
+  roi: number;
+  green: number;
+  worst: number;
+  conc: number;
+}
+
 interface CacheEntry extends Stats {
   at: number;
   /** Last successful fills classification, reused when a refresh cannot reach the API. */
@@ -159,6 +179,9 @@ interface CacheEntry extends Stats {
   /** Live window PnL and return, so the board and the favourites card agree. */
   pnl?: number;
   roi?: number;
+  /** Both windows from the same portfolio call, for the 7D/30D switch. */
+  month?: WindowStats;
+  week?: WindowStats;
   fails?: string;
 }
 
@@ -222,29 +245,44 @@ export async function screenLeaderboard(limit = 25, nearLimit = 14): Promise<Scr
 
   const stale = candidates.filter((r) => {
     const hit = cache.get(r.addr);
-    return !hit || now - hit.at > STATS_TTL_MS;
+    // Entries written before the window switch existed lack month/week, so
+    // they are refreshed once even if they are recent.
+    return !hit || !hit.month || !hit.week || now - hit.at > STATS_TTL_MS;
   });
 
   await pool(stale, 4, async (r) => {
     try {
       const p = await portfolio(r.addr);
-      const month = p.month ?? p.allTime;
-      const series = (month?.pnlHistory ?? []).map(([, v]) => Number(v)).filter(Number.isFinite);
-      if (series.length < 10) return;
-      const st = dailyStats(series);
-      const equity = month?.accountValueHistory?.length
-        ? Number(month.accountValueHistory[month.accountValueHistory.length - 1]![1])
-        : 0;
       // The venue's own published numbers can lag by hours; the same live
       // figures the favourites card uses keep the two surfaces consistent.
-      const roi = windowReturn(month) ?? (equity ? st.pnl / equity : 0);
+      // Both windows are computed from one call so the board can switch.
+      const statsFor = (win?: { accountValueHistory?: [number, string][]; pnlHistory?: [number, string][] }) => {
+        const series = (win?.pnlHistory ?? []).map(([, v]) => Number(v)).filter(Number.isFinite);
+        if (series.length < 3) return null;
+        const st = dailyStats(series);
+        const eq = win?.accountValueHistory?.length
+          ? Number(win.accountValueHistory[win.accountValueHistory.length - 1]![1])
+          : 0;
+        return {
+          pnl: st.pnl,
+          roi: windowReturn(win) ?? (eq ? st.pnl / eq : 0),
+          green: st.greenDays,
+          worst: st.worstDay,
+          conc: st.concentration,
+        };
+      };
+      const month = statsFor(p.month ?? p.allTime);
+      if (!month) return;
+      const week = statsFor(p.week ?? p.month) ?? month;
       cache.set(r.addr, {
         at: now,
-        greenDays: st.greenDays,
-        worstDay: st.worstDay,
-        concentration: st.concentration,
-        pnl: st.pnl,
-        roi,
+        greenDays: month.green,
+        worstDay: month.worst,
+        concentration: month.conc,
+        pnl: month.pnl,
+        roi: month.roi,
+        month,
+        week,
       });
     } catch {
       /* keep the old entry, if any */
@@ -311,8 +349,13 @@ export async function screenLeaderboard(limit = 25, nearLimit = 14): Promise<Scr
 
     const row: LeaderRow = {
       ...r,
-      pnl30: hit.pnl ?? r.pnl30,
-      roi30: hit.roi ?? r.roi30,
+      pnl30: hit.month?.pnl ?? hit.pnl ?? r.pnl30,
+      roi30: hit.month?.roi ?? hit.roi ?? r.roi30,
+      pnl7: hit.week?.pnl ?? null,
+      roi7: hit.week?.roi ?? null,
+      green7: hit.week?.green ?? null,
+      worst7: hit.week?.worst ?? null,
+      conc7: hit.week?.conc ?? null,
       greenDays: hit.greenDays,
       worstDay: hit.worstDay,
       concentration: hit.concentration,

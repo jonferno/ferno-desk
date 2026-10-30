@@ -16,7 +16,7 @@ type Col = keyof Pick<
 const COLS: Array<{ key: Col; label: string; hint: string }> = [
   { key: "pnl30", label: "30D P&L", hint: "headline profit, not a quality signal" },
   { key: "roi30", label: "ROI", hint: "30 day return on capital, transfers neutral" },
-  { key: "wins48", label: "WIN/LOSS", hint: "closing fills in the last 48h that ended in profit" },
+  { key: "wins48", label: "WIN/LOSS", hint: "closing orders in the last 48h, in profit against not; fills are grouped by order" },
   { key: "greenDays", label: "GREEN", hint: "share of profitable days over full history" },
   { key: "worstDay", label: "WORST", hint: "worst single day" },
   { key: "concentration", label: "BEST/TOT", hint: "share of profit from the single best day" },
@@ -33,6 +33,7 @@ function Table({
   setSort,
   showReason,
   followed,
+  windowId,
 }: {
   rows: LeaderRow[];
   onPick: (r: LeaderRow) => void;
@@ -41,17 +42,39 @@ function Table({
   setSort: (c: Col) => void;
   showReason?: boolean;
   followed?: Set<string>;
+  windowId: "7d" | "30d";
 }) {
+  // The 48h columns never switch; the window columns read the 7d figures.
+  const val = (r: LeaderRow, key: Col): number | null | undefined => {
+    if (windowId === "7d") {
+      switch (key) {
+        case "pnl30":
+          return r.pnl7;
+        case "roi30":
+          return r.roi7;
+        case "greenDays":
+          return r.green7;
+        case "worstDay":
+          return r.worst7;
+        case "concentration":
+          return r.conc7;
+        default:
+          break;
+      }
+    }
+    return r[key] as number | null | undefined;
+  };
+
   const sorted = useMemo(() => {
     return [...rows].sort((a, b) => {
-      const av = a[sort];
-      const bv = b[sort];
+      const av = val(a, sort);
+      const bv = val(b, sort);
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
       return desc ? Number(bv) - Number(av) : Number(av) - Number(bv);
     });
-  }, [rows, sort, desc]);
+  }, [rows, sort, desc, windowId]);
 
   return (
     <div className="hl-scroll">
@@ -62,7 +85,7 @@ function Table({
             <th>WALLET</th>
             {COLS.map((c) => (
               <th key={c.key} title={c.hint} className="hl-sort" onClick={() => setSort(c.key)}>
-                {c.label}
+                {c.key === "pnl30" ? `${windowId === "7d" ? "7D" : "30D"} P&L` : c.label}
                 {sort === c.key ? <i>{desc ? "▾" : "▴"}</i> : null}
               </th>
             ))}
@@ -70,43 +93,50 @@ function Table({
           </tr>
         </thead>
         <tbody>
-          {sorted.map((r, i) => (
-            <tr key={r.addr} onClick={() => onPick(r)} className="hl-row">
-              <td className="hl-rank num">
-                {i + 1}
-                {followed?.has(r.addr.toLowerCase()) ? (
-                  <span className="hl-star" title="you follow this wallet" aria-label="following">
-                    ★
-                  </span>
-                ) : null}
-              </td>
-              <td className="hl-addr num">{r.addr.slice(0, 6)}…{r.addr.slice(-4)}</td>
-              <td className={`num ${r.pnl30 >= 0 ? "is-up" : "is-down"}`}>{money(r.pnl30)}</td>
-              <td className={`num ${r.roi30 >= 0 ? "is-up" : "is-down"}`}>{pct(r.roi30)}</td>
-              <td className="num">
-                {r.wins48 != null ? (
-                  <>
-                    {r.wins48}/{r.losses48 ?? 0}
-                    {r.wins48 + (r.losses48 ?? 0) > 0 ? (
-                      <i className="hl-winrate">
-                        {" "}
-                        {((r.wins48 / (r.wins48 + (r.losses48 ?? 0))) * 100).toFixed(0)}%
-                      </i>
-                    ) : null}
-                  </>
-                ) : (
-                  "·"
-                )}
-              </td>
-              <td className="num">{r.greenDays.toFixed(0)}%</td>
-              <td className="num is-down">{money(r.worstDay)}</td>
-              <td className={`num ${r.concentration >= 0.55 ? "is-down" : ""}`}>{pct(r.concentration, 0)}</td>
-              <td className="num">{r.trades24h ?? "·"}</td>
+          {sorted.map((r, i) => {
+            const pnl = val(r, "pnl30");
+            const roi = val(r, "roi30");
+            const green = val(r, "greenDays");
+            const worst = val(r, "worstDay");
+            const conc = val(r, "concentration");
+            return (
+              <tr key={r.addr} onClick={() => onPick(r)} className="hl-row">
+                <td className="hl-rank num">
+                  {i + 1}
+                  {followed?.has(r.addr.toLowerCase()) ? (
+                    <span className="hl-star" title="you favourite this wallet" aria-label="favourite">
+                      ★
+                    </span>
+                  ) : null}
+                </td>
+                <td className="hl-addr num">{r.addr.slice(0, 6)}…{r.addr.slice(-4)}</td>
+                <td className={`num ${pnl != null && pnl >= 0 ? "is-up" : "is-down"}`}>{pnl == null ? "·" : money(pnl)}</td>
+                <td className={`num ${roi != null && roi >= 0 ? "is-up" : "is-down"}`}>{roi == null ? "·" : pct(roi)}</td>
+                <td className="num">
+                  {r.wins48 != null ? (
+                    <>
+                      {r.wins48}/{r.losses48 ?? 0}
+                      {r.wins48 + (r.losses48 ?? 0) > 0 ? (
+                        <i className="hl-winrate">
+                          {" "}
+                          {((r.wins48 / (r.wins48 + (r.losses48 ?? 0))) * 100).toFixed(0)}%
+                        </i>
+                      ) : null}
+                    </>
+                  ) : (
+                    "·"
+                  )}
+                </td>
+                <td className="num">{green == null ? "·" : `${green.toFixed(0)}%`}</td>
+                <td className="num is-down">{worst == null ? "·" : money(worst)}</td>
+                <td className={`num ${conc != null && conc >= 0.55 ? "is-down" : ""}`}>{conc == null ? "·" : pct(conc, 0)}</td>
+                <td className="num">{r.trades24h ?? "·"}</td>
               <td className="num">{r.trades7d != null ? `${r.trades7d}${r.tradesCapped ? "+" : ""}` : "·"}</td>
               <td className="num">{r.trades30d != null ? `${r.trades30d}${r.tradesCapped ? "+" : ""}` : "·"}</td>
               {showReason ? <td className="hl-reason">{r.reason || "-"}</td> : null}
-            </tr>
-          ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -126,6 +156,7 @@ export function Leaderboard({
 }) {
   const [sort, setSort] = useState<Col>("pnl30");
   const [desc, setDesc] = useState(true);
+  const [windowId, setWindowId] = useState<"7d" | "30d">("30d");
 
   const click = (c: Col) => {
     if (c === sort) setDesc(!desc);
@@ -140,17 +171,38 @@ export function Leaderboard({
       <section className="hl-panel">
         <div className="hl-panel__head">
           <h2 className="lab">CONSISTENT AND ACTIVE</h2>
+          <div className="hl-seg">
+            {(["7d", "30d"] as const).map((w) => (
+              <button
+                key={w}
+                type="button"
+                className={`chip ${windowId === w ? "is-on" : ""}`}
+                onClick={() => setWindowId(w)}
+              >
+                {w.toUpperCase()}
+              </button>
+            ))}
+          </div>
           <span className="hl-grow" />
           <span className="hl-lab">{rows.length} wallets</span>
         </div>
         {rows.length === 0 ? (
           <p className="hl-empty">building the board. the first pass takes about a minute.</p>
         ) : (
-          <Table rows={rows} onPick={onPick} sort={sort} desc={desc} setSort={click} followed={followed} />
+          <Table
+            rows={rows}
+            onPick={onPick}
+            sort={sort}
+            desc={desc}
+            setSort={click}
+            followed={followed}
+            windowId={windowId}
+          />
         )}
         <p className="hl-note">
           Passes all four: active in the last 48h, green days at or above 48%, one day not more than 55% of profit, worst
-          day better than -30% of equity. Ranked on their full history, not the last month.
+          day better than -30% of equity. The 7D/30D switch changes the PnL, ROI, green, worst and best-day columns; the 48h
+          and win/loss figures always cover the last 48 hours.
         </p>
       </section>
 
@@ -161,7 +213,16 @@ export function Leaderboard({
             <span className="hl-grow" />
             <span className="hl-lab">failed exactly one test</span>
           </div>
-          <Table rows={near} onPick={onPick} sort={sort} desc={desc} setSort={click} showReason followed={followed} />
+          <Table
+            rows={near}
+            onPick={onPick}
+            sort={sort}
+            desc={desc}
+            setSort={click}
+            showReason
+            followed={followed}
+            windowId={windowId}
+          />
           <p className="hl-note">
             One weak spot each, listed so you can judge it yourself instead of having it hidden. Click any row for the
             full wallet.
