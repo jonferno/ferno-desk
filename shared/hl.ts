@@ -135,6 +135,8 @@ export interface FollowedLastTrade {
   at: number;
   coin: string;
   side: "LONG" | "SHORT";
+  /** What that fill did: opened, closed, or a spot buy/sell. */
+  action: "OPEN" | "CLOSE" | "BUY" | "SELL";
   /** Unrealised move on the position that fill belongs to, as a fraction. */
   pct: number | null;
   entryPx: number | null;

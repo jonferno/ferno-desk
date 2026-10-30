@@ -173,18 +173,25 @@ export function Following({ onPick }: { onPick: (addr: string) => void }) {
                     {s?.last ? (
                       <span
                         className="hl-last"
-                        title={`${s.last.side} ${s.last.coin} · ${when(s.last.at)}${
+                        title={`${s.last.action}${s.last.action === "OPEN" || s.last.action === "CLOSE" ? ` ${s.last.side}` : ""} ${s.last.coin} · ${when(s.last.at)}${
                           s.last.entryPx ? ` · entry ${px(s.last.entryPx)}` : " · position closed"
                         }${s.last.markPx ? ` · mark ${px(s.last.markPx)}` : ""}`}
                       >
-                        <b className={s.last.side === "LONG" ? "is-up" : "is-down"}>{s.last.side}</b>
+                        <span className="hl-last__kind">{s.last.action}</span>
+                        {s.last.action === "OPEN" || s.last.action === "CLOSE" ? (
+                          <b className={s.last.side === "LONG" ? "is-up" : "is-down"}>{s.last.side}</b>
+                        ) : null}
                         <span className="hl-last__coin">{s.last.coin}</span>
                         <span
                           className={`hl-last__pct ${
                             s.last.pct === null ? "hl-last__pct--flat" : s.last.pct >= 0 ? "is-up" : "is-down"
                           }`}
                         >
-                          {s.last.pct === null ? "closed" : signed(s.last.pct)}
+                          {s.last.pct === null
+                            ? s.last.action === "CLOSE"
+                              ? "closed"
+                              : "·"
+                            : signed(s.last.pct)}
                         </span>
                         <span className="hl-last__when">{ago(s.last.at)}</span>
                       </span>

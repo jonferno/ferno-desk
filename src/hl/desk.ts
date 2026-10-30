@@ -409,7 +409,8 @@ export async function spotNameMap(): Promise<Map<string, string>> {
   } catch {
     /* fall back to the raw id */
   }
-  spotLabels = { at: Date.now(), map };
+  // Do not cache a failed lookup for half an hour; the next call should retry.
+  if (map.size) spotLabels = { at: Date.now(), map };
   return map;
 }
 
@@ -646,6 +647,13 @@ async function lastTrade(addr: string): Promise<FollowedLastTrade | null> {
     at: newest.time,
     coin: coinName,
     side,
+    action: newest.dir.startsWith("Open")
+      ? "OPEN"
+      : newest.dir.startsWith("Close")
+        ? "CLOSE"
+        : isBuyFill(newest.dir)
+          ? "BUY"
+          : "SELL",
     pct: pct === null ? null : Number(pct.toFixed(5)),
     entryPx: entry,
     markPx: open && mark > 0 ? mark : null,

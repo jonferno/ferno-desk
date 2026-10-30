@@ -194,7 +194,7 @@ export function GmxFollowingView({
                         l.pnlPct != null ? ` · ${(l.pnlPct * 100).toFixed(1)}% on the fill` : ""
                       }`}
                     >
-                      {l.side} {l.market}
+                      <span className="hl-last__kind">{l.kind.toUpperCase()}</span> {l.side} {l.market}
                       {l.pnlPct != null ? (
                         <b className={l.pnlPct >= 0 ? "is-up" : "is-down"}>
                           {" "}

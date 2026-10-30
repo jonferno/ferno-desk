@@ -115,7 +115,9 @@ export async function gmxLastTrade(addr: string): Promise<GmxLastTrade | null> {
   let last: GmxLastTrade | null = null;
   try {
     const [rows, map] = await Promise.all([trades(addr, 48), markets()]);
-    const t = rows[0];
+    // Swaps and unknown events can carry the zero address; they are not a
+    // market anyone can open.
+    const t = rows.find((x) => x.marketAddress && !/^0x0{40}$/i.test(x.marketAddress));
     if (t) {
       const size = usd(t.sizeDeltaUsd);
       const pnl = usd(t.pnlUsd);
@@ -175,6 +177,7 @@ export async function gmxWallet(addr: string): Promise<GmxWallet> {
 
   const tradeRows: GmxTrade[] = rawTrades
     .filter((t) => (t.orderType ?? 0) >= 2)
+    .filter((t) => t.marketAddress && !/^0x0{40}$/i.test(t.marketAddress))
     .map((t) => ({
       time: (t.timestamp ?? 0) * 1000,
       market: label(t.marketAddress),
