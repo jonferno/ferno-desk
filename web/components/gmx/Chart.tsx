@@ -46,8 +46,14 @@ interface LCChart {
 }
 type LCModule = { createChart: (el: HTMLElement, o: Record<string, unknown>) => LCChart };
 
-const fmt = (n: number) =>
-  n >= 1000 ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : n >= 1 ? n.toFixed(2) : n.toFixed(5);
+// Crypto prices need more decimals the smaller they get; two is fine for BTC
+// and useless for DOGE at 0.76 or PEPE at 0.000008.
+const dp = (n: number) => (n >= 1000 ? 2 : n >= 1 ? 2 : n >= 0.01 ? 4 : n >= 0.0001 ? 6 : 8);
+const priceFormat = (n: number) => {
+  const precision = dp(n);
+  return { type: "price", precision, minMove: 10 ** -precision };
+};
+const fmt = (n: number) => (n >= 1000 ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : n.toFixed(dp(n)));
 
 const BASE_OPTS = {
   layout: { background: { color: "transparent" }, textColor: "rgba(255,255,255,0.5)", fontSize: 11 },
@@ -261,19 +267,21 @@ export function GmxChart() {
     if (!LC || !priceEl || !data || data.candles.length === 0) return;
 
     const price = LC.createChart(priceEl, { ...BASE_OPTS, autoSize: true });
+    const pf = priceFormat(data.candles[data.candles.length - 1]!.close);
     const candles = price.addCandlestickSeries({
       upColor: "#4aa8ff",
       downColor: "#ff8c42",
       wickUpColor: "#4aa8ff",
       wickDownColor: "#ff8c42",
       borderVisible: false,
+      priceFormat: pf,
     });
     candles.setData(data.candles);
 
     if (showInd && data.band) {
-      const upper = price.addLineSeries({ color: "rgba(74,168,255,0.55)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+      const upper = price.addLineSeries({ color: "rgba(74,168,255,0.55)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, priceFormat: pf });
       upper.setData(data.band.upper);
-      const lower = price.addLineSeries({ color: "rgba(255,140,66,0.55)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+      const lower = price.addLineSeries({ color: "rgba(255,140,66,0.55)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, priceFormat: pf });
       lower.setData(data.band.lower);
       const basis = price.addLineSeries({
         color: "rgba(255,255,255,0.28)",
@@ -281,6 +289,7 @@ export function GmxChart() {
         lineStyle: 2,
         priceLineVisible: false,
         lastValueVisible: false,
+        priceFormat: pf,
       });
       basis.setData(data.basis);
     }
@@ -377,6 +386,7 @@ export function GmxChart() {
       priceLineVisible: false,
       lastValueVisible: false,
       crosshairMarkerVisible: false,
+      priceFormat: priceFormat(b.price),
     });
     line.setData([a, b].sort((x, y) => x.time - y.time).map((p) => ({ time: p.time, value: p.price })));
     return () => {
