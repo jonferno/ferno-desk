@@ -36,7 +36,9 @@ the handful of coins you actually trade are one click away.
 plus its newest fill and how that position is doing right now. Both venues take their own Discord
 webhook from the FAVOURITES tab: each alert is an embed with the coin logo, price, notional, fill count
 and links to that venue's chart and the wallet, folded to one message per wallet per 15 minutes so a
-burst does not spam the channel.
+burst does not spam the channel. Each card also has its own alerts on/off switch. Closes are quieter:
+a wallet selling a position in small pieces only alerts once 80% of it is gone, or when the position
+goes flat, so a slow exit is one message instead of twenty.
 
 **GMX venue.** A switch in the header swaps the whole desk to GMX v2 on Arbitrum. The board is built
 from the venue's own `periodAccountStats` rows, so PnL and ROI match app.gmx.io: PnL is realised PnL,

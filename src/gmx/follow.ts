@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { alertPayload, iconFor, iconMap, maskWebhook, postWebhook, testPayload } from "../alerts";
-import { marketMap, tradesSince, usd, type RawTrade } from "./client";
+import { marketMap, positions, tradesSince, usd, type RawTrade } from "./client";
 
 /**
  * Starred GMX wallets, and their Discord alerts.
@@ -182,8 +182,25 @@ export class GmxFollowing {
             byMarket.set(id, list);
           }
 
+          // A close only alerts once most of the position is gone, so a seller
+          // scaling out in pieces does not page anyone until they are leaving.
+          const live = await positions(addr).catch(() => []);
+          const remaining = new Map<string, number>();
+          for (const p of live) {
+            if (p.marketAddress) remaining.set(p.marketAddress.toLowerCase(), Math.abs(usd(p.sizeInUsd)));
+          }
+
           for (const [marketId, list] of byMarket) {
             const alertKey = `${key}:${marketId}`;
+            const decreasing = list.every((f) => (f.orderType ?? 0) >= 4 && (f.orderType ?? 0) <= 7);
+            if (decreasing) {
+              const left = remaining.get(marketId) ?? 0;
+              const closedUsd = list.reduce((sum, f) => sum + usd(f.sizeDeltaUsd), 0);
+              const before = left + closedUsd;
+              // Still holding more than a fifth of what they had: keep quiet.
+              if (before > 0 && left > before * 0.2) continue;
+            }
+
             if (now - (this.lastAlert.get(alertKey) ?? 0) < WINDOW_MS) continue;
             this.lastAlert.set(alertKey, now);
 

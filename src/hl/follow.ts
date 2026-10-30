@@ -30,6 +30,8 @@ interface RawFill {
   dir: string;
   px: string;
   sz: string;
+  /** Position held before this fill; lets a close be measured against it. */
+  startPosition?: string;
 }
 
 const mask = (url: string) => url.replace(/\/[^/]+$/, "/…" + url.slice(-4));
@@ -38,6 +40,8 @@ export class Following {
   private path: string;
   private store: Store;
   private lastAlert = new Map<string, number>();
+  /** Close campaigns in progress, keyed by wallet:coin. */
+  private closing = new Map<string, { base: number; closed: number }>();
   private alertsSent = 0;
   private polledAt = 0;
   private timer: NodeJS.Timeout | null = null;
@@ -183,6 +187,28 @@ export class Following {
           const icons = await iconMap();
           for (const [coin, list] of byCoin) {
             const key = `${w.addr.toLowerCase()}:${coin}`;
+            const closes = list.filter((f) => f.dir.startsWith("Close"));
+            const opens = list.filter((f) => !f.dir.startsWith("Close"));
+
+            // A seller scaling out in small pieces should not page anyone until
+            // they are actually leaving. Track the position they started closing
+            // and only alert once 80% of it is gone, or the position is flat.
+            if (opens.length) this.closing.delete(key);
+            if (closes.length) {
+              const first = closes[0]!;
+              const camp = this.closing.get(key) ?? { base: Math.abs(Number(first.startPosition ?? 0)), closed: 0 };
+              if (!camp.base) camp.base = Math.abs(Number(first.startPosition ?? 0));
+              camp.closed += closes.reduce((a, f) => a + Number(f.sz), 0);
+              this.closing.set(key, camp);
+
+              const last = closes[closes.length - 1]!;
+              const before = Math.abs(Number(last.startPosition ?? 0));
+              const flat = before > 0 && before - Number(last.sz) <= Math.max(1e-9, camp.base * 0.01);
+              const enough = camp.base > 0 ? camp.closed >= camp.base * 0.8 : true;
+              if (!enough && !flat) continue;
+              this.closing.delete(key);
+            }
+
             if (now - (this.lastAlert.get(key) ?? 0) < WINDOW_MS) continue;
             this.lastAlert.set(key, now);
             const first = list[0]!;
