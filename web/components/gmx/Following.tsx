@@ -90,6 +90,19 @@ export function GmxFollowingView({
     }
   };
 
+  const toggleAlerts = async (addr: string, enabled: boolean) => {
+    setCards((prev) => (prev ? prev.map((c) => (c.addr === addr ? { ...c, alerts: enabled } : c)) : prev));
+    try {
+      await fetch(`/api/gmx/following/${addr}/alerts`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+    } catch {
+      setCards((prev) => (prev ? prev.map((c) => (c.addr === addr ? { ...c, alerts: !enabled } : c)) : prev));
+    }
+  };
+
   return (
     <>
       <section className="hl-panel">
@@ -143,6 +156,17 @@ export function GmxFollowingView({
                   </span>
                   <code className="hl-code">{short(w.addr)}</code>
                   <span className="hl-grow" />
+                  <button
+                    type="button"
+                    className={`chip ${w.alerts !== false ? "is-on" : ""}`}
+                    title="turn this wallet's discord alerts on or off"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void toggleAlerts(w.addr, w.alerts === false);
+                    }}
+                  >
+                    alerts {w.alerts !== false ? "on" : "off"}
+                  </button>
                   <button
                     type="button"
                     className="chip"

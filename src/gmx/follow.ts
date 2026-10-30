@@ -18,6 +18,8 @@ interface Store {
   webhook: string | null;
   wallets: string[];
   lastSeen: Record<string, number>;
+  /** Per wallet alert switch, keyed by lower-case address. Missing means on. */
+  alerts: Record<string, boolean>;
 }
 
 export class GmxFollowing {
@@ -47,12 +49,13 @@ export class GmxFollowing {
           webhook: typeof raw.webhook === "string" ? raw.webhook : null,
           wallets: wallets.slice(0, 50),
           lastSeen: raw.lastSeen && typeof raw.lastSeen === "object" ? raw.lastSeen : {},
+          alerts: raw.alerts && typeof raw.alerts === "object" ? raw.alerts : {},
         };
       }
     } catch {
       /* a corrupt file must not stop the desk */
     }
-    return { webhook: null, wallets: [], lastSeen: {} };
+    return { webhook: null, wallets: [], lastSeen: {}, alerts: {} };
   }
 
   private save(): void {
@@ -77,6 +80,7 @@ export class GmxFollowing {
       this.store.wallets = [...this.store.wallets, addr].slice(0, 50);
       // Start watching from now, not from before the wallet was starred.
       this.store.lastSeen[addr.toLowerCase()] = Math.floor(Date.now() / 1000);
+      this.store.alerts[addr.toLowerCase()] = true;
       this.save();
     }
     return this.list();
@@ -87,9 +91,21 @@ export class GmxFollowing {
     if (next.length !== this.store.wallets.length) {
       this.store.wallets = next;
       delete this.store.lastSeen[addr.toLowerCase()];
+      delete this.store.alerts[addr.toLowerCase()];
       this.save();
     }
     return this.list();
+  }
+
+  /** Whether this wallet's fills should post to Discord. Missing means on. */
+  alertsFor(addr: string): boolean {
+    return this.store.alerts[addr.toLowerCase()] !== false;
+  }
+
+  setAlerts(addr: string, enabled: boolean): void {
+    if (!this.has(addr)) return;
+    this.store.alerts[addr.toLowerCase()] = enabled;
+    this.save();
   }
 
   setWebhook(url: string | null): void {
@@ -144,6 +160,7 @@ export class GmxFollowing {
       for (const [addr, info] of markets) names.set(addr.toLowerCase(), info.symbol);
 
       for (const addr of this.store.wallets) {
+        if (!this.alertsFor(addr)) continue;
         const key = addr.toLowerCase();
         const since = this.store.lastSeen[key] ?? Math.floor(now / 1000) - 120;
         try {

@@ -67,6 +67,8 @@ export interface GmxFollowCard {
   addr: string;
   row: GmxRow | null;
   last: GmxLastTrade | null;
+  /** Whether this wallet's fills post to Discord. */
+  alerts: boolean;
 }
 
 export interface GmxWallet {  addr: string;

@@ -229,7 +229,7 @@ export function createServer(deps: { following: Following; favorites: Favorites;
   app.get("/api/gmx/following", async () => {
     const board = await gmxBoard("30d").catch(() => null);
     const addrs = gmxFollow.list();
-    const wallets: Array<{ addr: string; row: unknown; last: unknown }> = new Array(addrs.length);
+    const wallets: Array<{ addr: string; row: unknown; last: unknown; alerts: boolean }> = new Array(addrs.length);
     // Newest fill per wallet; the desk's trade helper caches each one for two
     // minutes, and four at a time keeps the API from being hammered.
     let cursor = 0;
@@ -242,6 +242,7 @@ export function createServer(deps: { following: Following; favorites: Favorites;
           addr,
           row: board?.rows.find((r) => r.addr.toLowerCase() === addr.toLowerCase()) ?? null,
           last: await gmxLastTrade(addr),
+          alerts: gmxFollow.alertsFor(addr),
         };
       }
     });
@@ -263,6 +264,11 @@ export function createServer(deps: { following: Following; favorites: Favorites;
   });
 
   app.post("/api/gmx/following/test", async () => ({ ok: await gmxFollow.testWebhook() }));
+
+  app.post<{ Params: { addr: string }; Body: { enabled?: boolean } }>("/api/gmx/following/:addr/alerts", async (req) => {
+    gmxFollow.setAlerts(String(req.params.addr), Boolean(req.body?.enabled));
+    return { ok: true, wallets: gmxFollow.list() };
+  });
 
   app.post<{ Body: { addr?: string } }>("/api/gmx/following", async (req, reply) => {
     const addr = String(req.body?.addr ?? "");
