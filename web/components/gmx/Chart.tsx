@@ -57,7 +57,19 @@ const BASE_OPTS = {
   crosshair: { mode: 0 },
 };
 
-function SymbolPicker({ symbols, symbol, onPick }: { symbols: string[]; symbol: string; onPick: (s: string) => void }) {
+function SymbolPicker({
+  symbols,
+  symbol,
+  onPick,
+  favs,
+  onToggleFav,
+}: {
+  symbols: string[];
+  symbol: string;
+  onPick: (s: string) => void;
+  favs: string[];
+  onToggleFav: (s: string) => void;
+}) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -68,6 +80,44 @@ function SymbolPicker({ symbols, symbol, onPick }: { symbols: string[]; symbol: 
     const rest = symbols.filter((s) => !s.startsWith(term) && s.includes(term));
     return [...starts, ...rest];
   }, [symbols, q]);
+
+  // Starred markets that exist here, above the full list. The token store is
+  // shared with Hyperliquid, so a coin starred on either side shows on both.
+  const pinned = useMemo(() => favs.filter((s) => symbols.includes(s)), [favs, symbols]);
+
+  const row = (s: string) => {
+    const on = favs.includes(s);
+    return (
+      <div key={s} className="hl-picker__row">
+        <button
+          type="button"
+          role="option"
+          aria-selected={s === symbol}
+          className={s === symbol ? "is-on" : ""}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onPick(s);
+            setOpen(false);
+          }}
+        >
+          <span>{s}</span>
+        </button>
+        <button
+          type="button"
+          className={`hl-picker__star ${on ? "is-on" : ""}`}
+          aria-label={on ? `unstar ${s}` : `star ${s}`}
+          title={on ? `remove ${s} from favourites` : `save ${s} to favourites`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleFav(s);
+          }}
+        >
+          {on ? "★" : "☆"}
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="hl-picker">
@@ -91,22 +141,17 @@ function SymbolPicker({ symbols, symbol, onPick }: { symbols: string[]; symbol: 
       />
       {open ? (
         <div className="hl-picker__list" role="listbox">
-          {list.slice(0, 80).map((s) => (
-            <button
-              key={s}
-              type="button"
-              role="option"
-              aria-selected={s === symbol}
-              className={s === symbol ? "is-on" : ""}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onPick(s);
-                setOpen(false);
-              }}
-            >
-              <span>{s}</span>
-            </button>
-          ))}
+          {pinned.length && !q.trim() ? (
+            <>
+              <span className="hl-picker__group">favourites</span>
+              {pinned.map(row)}
+              <span className="hl-picker__group">all markets</span>
+            </>
+          ) : null}
+          {list
+            .filter((s) => q.trim() || !favs.includes(s))
+            .slice(0, 80)
+            .map(row)}
           {list.length === 0 ? <span className="hl-picker__empty">no market matches that</span> : null}
         </div>
       ) : null}
@@ -124,6 +169,43 @@ export function GmxChart() {
   const [showInd, setShowInd] = useState(true);
   const [measure, setMeasure] = useState<{ a: Point; b: Point | null } | null>(null);
   const [armed, setArmed] = useState(false);
+  const [favs, setFavs] = useState<string[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/favorites")
+      .then((r) => r.json())
+      .then((body: { ok: boolean; coins?: string[] }) => {
+        if (alive && body.ok && Array.isArray(body.coins)) setFavs(body.coins);
+      })
+      .catch(() => {
+        /* a missing endpoint just means no stars */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const toggleFav = async (target: string) => {
+    const before = favs;
+    const on = before.includes(target);
+    setFavs(on ? before.filter((c) => c !== target) : [...before, target]);
+    try {
+      const res = await fetch(on ? `/api/favorites/${encodeURIComponent(target)}` : "/api/favorites", {
+        method: on ? "DELETE" : "POST",
+        headers: on ? undefined : { "content-type": "application/json" },
+        body: on ? undefined : JSON.stringify({ coin: target }),
+      });
+      const body = (await res.json()) as { ok: boolean; coins?: string[] };
+      if (!body.ok || !Array.isArray(body.coins)) throw new Error("not saved");
+      setFavs(body.coins);
+    } catch {
+      setFavs(before);
+    }
+  };
+
+  const starred = favs.includes(symbol);
+  const quick = favs.filter((s) => symbols.includes(s));
 
   const armedRef = useRef(false);
   useEffect(() => {
@@ -316,7 +398,22 @@ export function GmxChart() {
     <section className="hl-panel hl-panel--fill">
       <div className="hl-panel__head hl-chartbar">
         <h2 className="lab">CHART</h2>
-        <SymbolPicker symbols={symbols} symbol={symbol} onPick={setSymbol} />
+        <SymbolPicker
+          symbols={symbols}
+          symbol={symbol}
+          onPick={setSymbol}
+          favs={favs}
+          onToggleFav={(s) => void toggleFav(s)}
+        />
+        <button
+          type="button"
+          className={`chip hl-fav ${starred ? "is-on" : ""}`}
+          aria-pressed={starred}
+          title={starred ? `remove ${symbol} from favourites` : `save ${symbol} to favourites`}
+          onClick={() => void toggleFav(symbol)}
+        >
+          {starred ? "★ saved" : "☆ save"}
+        </button>
         <div className="hl-seg">
           {INTERVALS.map((i) => (
             <button key={i} type="button" className={`chip ${interval === i ? "is-on" : ""}`} onClick={() => setInterval(i)}>
@@ -351,6 +448,17 @@ export function GmxChart() {
       </div>
 
       {error ? <div className="hl-error">{error}</div> : null}
+
+      {quick.length ? (
+        <div className="hl-favbar">
+          <span className="hl-lab">favourites</span>
+          {quick.map((s) => (
+            <button key={s} type="button" className={`chip ${s === symbol ? "is-on" : ""}`} onClick={() => setSymbol(s)}>
+              ★ {s}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="hl-measure">
         {a && b && move != null ? (

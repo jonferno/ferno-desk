@@ -46,7 +46,8 @@ and the last 48 hours of executed trades from `/trades/search`. Because GMX publ
 history, the wallet chart is cumulative realised PnL over 30 days from the day-level `accountStats` rows,
 not an equity curve. Windows are 7d and 30d, day aligned because GMX's resolver only accepts UTC
 midnight. The chart tab reads `/prices/ohlcv` and runs the same zero-lag band and MACD as the
-Hyperliquid side, with the same measure tool.
+Hyperliquid side, with the same measure tool. Chart favourites are one shared list keyed by symbol, so
+a coin starred on either venue shows on both when that ticker exists there.
 
 **Passcode gate.** Set `SITE_PASSCODE` and every page and `/api/*` route needs it, with an HttpOnly
 HMAC cookie and a 10-attempt / 10-minute lockout. Leave it empty to run open on your own box.
